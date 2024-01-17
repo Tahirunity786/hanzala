@@ -1,52 +1,88 @@
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
-# Create your models here.
-
-class UserManager(BaseUserManager):
-    def create_user(self, username, email, otp, password=None, **extra_fields):
-        if not email:
-            raise ValueError('Users must have an email address')
-
-        user, created = self.get_or_create(
-            email=self.normalize_email(email),
-            otp=otp,
-            defaults={'username': username, **extra_fields}
-        )
-
-        if not created:
-            # Update other fields if the user already exists
-            user.username = username
-            user.otp = otp
-            user.set_password(password)
-            user.save(using=self._db)
-
-        return user
-
-    def create_staffuser(self, username, email, otp, password, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        return self.create_user(username, email, otp, password, **extra_fields)
+from django.contrib.auth.models import User
 
 
 
-class User(AbstractBaseUser):
-    email = models.EmailField(
-        verbose_name='email address',
-        max_length=255,
-        unique=True,
-    )
-    username = models.CharField(max_length=150, default='', unique=True)
-    otp = models.BigIntegerField(null=True)
-    otp_delay = models.TimeField(auto_now=True)
-    otp_limit = models.IntegerField(default=1)
-    is_active = models.BooleanField(default=False)
-    password = models.CharField(max_length=200, default='')
-    is_verified = models.BooleanField(default=False)
-    # Handling the user is blocked by staff
-    is_blocked = models.BooleanField(default=False)
-
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email'] # Email & Password are required by default.
+class UserProducts(models.Model):
+    CONDITION_CHOICES = [
+        ("New with tags", "New with tags"),
+        ("New without tags", "New without tags"),
+        ("Very Good", "Very Good"),
+        ("Good", "Good"),
+        ("Satisfactory", "Satisfactory"),
+    ]
+    BRAND_CHOICES = [
+        ("Nokia", "Nokia"),
+        ("Iphone", "Iphone"),
+        ("Sumsung", "Sumsung"),
+        ("Opps", "Opps"),
+        ("Vivo", "Vivo"),
+    ]
+    username = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products_created", default="", blank=True, null=True)
+    product_token = models.CharField(max_length=200, default=None, db_index=True,blank=True, null=True)
+    product_title = models.CharField(max_length=150, default=None, db_index=True, unique=True)
+    product_description = models.TextField(verbose_name="Product Description", default=None,)
+    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES, default="Not decided", verbose_name="Condition")
+    brand = models.CharField(max_length=20, choices=BRAND_CHOICES, default="Not decided", verbose_name="Brand", db_index=True)
+    color = models.CharField(max_length=100, default=None)
+    model = models.CharField(max_length=100, default=None)
+    ram = models.CharField(max_length=100, default=None)
+    storage = models.BigIntegerField(default=0)
+    battery_capacity = models.CharField(max_length=20, default=None)
     
-    # hook in the New Manager to our Model
-    objects = UserManager()
+    def __str__(self):
+        return f"{self.product_title} - {self.product_token}"
+
+    class Meta:
+        verbose_name_plural = "User Products"
+        
+        
+        
+class ProductImage(models.Model):
+    product = models.ForeignKey(UserProducts, on_delete=models.CASCADE, default=None)
+    image = models.ImageField(upload_to='product_images/', verbose_name="Product Image")
+    
+    
+    
+class Order(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    product = models.ForeignKey(UserProducts, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    activate_order = models.BooleanField(default=False, db_index=True)
+    received_order = models.BooleanField(default=False, db_index=True)
+    canceled_order = models.BooleanField(default=False, db_index=True)
+
+    def __str__(self):
+        return f"Order #{self.id} - {self.user.username} - {self.product.product_title}"
+
+class FavouritesSaved(models.Model):  # Updated class name
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="saved_products")
+    product = models.ForeignKey(UserProducts, on_delete=models.CASCADE, related_name="favorited_by")
+    saved_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user.username}'s saved products"
+
+class Reviews(models.Model):
+    reviews_giver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reviews_given")
+    reviewer_message = models.TextField(verbose_name="Message")
+    
+    def __str__(self):
+        return f"{self.reviews_giver.username} has given {self.reviewer_message}"
+
+class UserProfile(models.Model):
+    BILLING_INFO_CHOICES = [
+        ('cash', 'Cash'),
+        ('Google pay', 'Google pay'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, db_index=True)
+    my_ads = models.ManyToManyField(UserProducts, related_name='user_ads', blank=True)
+    orders = models.ManyToManyField(Order, related_name='user_orders', blank=True)
+    fav_saved_items = models.ManyToManyField(FavouritesSaved, related_name='user_saved', blank=True)
+    reviews = models.ManyToManyField(Reviews, related_name='user_reviews', blank=True)
+    billing_info = models.CharField(max_length=100, choices=BILLING_INFO_CHOICES, default='Not decided', db_index=True)
+    
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
