@@ -148,3 +148,15 @@ class ProductSerializer(serializers.ModelSerializer):
             instance (UserProducts): The UserProducts instance to be deleted.
         """
         instance.delete()
+        
+class ProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductImage
+        fields = ('image',)
+
+class UserProductsSerializer(serializers.ModelSerializer):
+    product_image = ProductImageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = UserProducts
+        fields = '__all__'

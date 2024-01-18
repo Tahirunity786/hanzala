@@ -4,15 +4,17 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, ProductSerializer
+from core.serializers import CreateUserSearializer, ProductSerializer, UserProductsSerializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
 from rest_framework.permissions import IsAuthenticated
 import uuid
-from core.models import ProductImage
+from core.models import ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
+from rest_framework import viewsets
+
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -155,9 +157,9 @@ class ProductAPIView(APIView):
             # Process and save product images
             images = []
             for image_data in request.data.getlist('images'):
-                product_image = ProductImage.objects.create(product=product, image=image_data)
+                product_image = ProductImage.objects.create(image=image_data)
+                product.product_image.add(product_image)
                 images.append({
-                    "image_id": product_image.id,
                     "image_url": product_image.image.url,  # Assuming you want to include the URL
                 })
 
@@ -187,3 +189,11 @@ class ProductAPIView(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
         else:
             return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
+
+class UserProductsViewSet(viewsets.ModelViewSet):
+    queryset = UserProducts.objects.all()
+    serializer_class = UserProductsSerializer
+    
+    
+            
+            

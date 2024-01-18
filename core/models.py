@@ -1,7 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-
+        
+class ProductImage(models.Model):
+    image = models.ImageField(upload_to='product_images/', verbose_name="Product Image")
 
 class UserProducts(models.Model):
     CONDITION_CHOICES = [
@@ -19,7 +21,8 @@ class UserProducts(models.Model):
         ("Vivo", "Vivo"),
     ]
     username = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products_created", default="", blank=True, null=True)
-    product_token = models.CharField(max_length=200, default=None, db_index=True,blank=True, null=True)
+    product_image = models.ManyToManyField(ProductImage, related_name="products_images", blank=True)
+    product_token = models.CharField(max_length=200, default=None, db_index=True, blank=True, null=True)
     product_title = models.CharField(max_length=150, default=None, db_index=True, unique=True)
     product_description = models.TextField(verbose_name="Product Description", default=None,)
     condition = models.CharField(max_length=20, choices=CONDITION_CHOICES, default="Not decided", verbose_name="Condition")
@@ -35,13 +38,6 @@ class UserProducts(models.Model):
 
     class Meta:
         verbose_name_plural = "User Products"
-        
-        
-        
-class ProductImage(models.Model):
-    product = models.ForeignKey(UserProducts, on_delete=models.CASCADE, default=None)
-    image = models.ImageField(upload_to='product_images/', verbose_name="Product Image")
-    
     
     
 class Order(models.Model):
