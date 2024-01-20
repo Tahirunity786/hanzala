@@ -160,3 +160,11 @@ class UserProductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProducts
         fields = '__all__'
+        
+        
+class Useraddsearializer(serializers.ModelSerializer):
+    product_image = ProductImageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = UserProducts
+        fields = '__all__'

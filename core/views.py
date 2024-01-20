@@ -4,7 +4,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, ProductSerializer, UserProductsSerializer
+from core.serializers import CreateUserSearializer, ProductSerializer, UserProductsSerializer,Useraddsearializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
@@ -127,6 +127,7 @@ class ProductAPIView(APIView):
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    renderer_classes = [UserRenderer]
 
     def post(self, request):
         """
@@ -193,7 +194,26 @@ class ProductAPIView(APIView):
 class UserProductsViewSet(viewsets.ModelViewSet):
     queryset = UserProducts.objects.all()
     serializer_class = UserProductsSerializer
+    renderer_classes = [UserRenderer]
     
     
-            
-            
+
+
+class ADS(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_id = request.user.id
+        
+        if not user_id:
+            return Response({"error": "User ID is required in the request data."}, status=400)
+
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        queryset = UserProducts.objects.filter(username=user)
+        serializer = UserProductsSerializer(queryset, many=True)
+
+        return Response(serializer.data, status=200)
