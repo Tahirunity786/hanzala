@@ -5,13 +5,13 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, ProductImageSerializer, ProductSerializer, UserProductsSerializer,Useraddsearializer
+from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, UserProductsSerializer,Useraddsearializer, Userfavouriteproduct
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
 from rest_framework.permissions import IsAuthenticated
 import uuid
-from core.models import ProductImage, UserProducts
+from core.models import FavouritesSaved, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
 from rest_framework import viewsets
@@ -175,6 +175,7 @@ class ProductAPIView(APIView):
                 "success": "Your product was added successfully",
                 "product": {
                     "product_category": product.category,
+                    "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
                     "product_id": product.id,
                     "product_token": str(product.product_token),
                     "product_images": images,
@@ -225,34 +226,80 @@ class UserProductsViewSet(APIView):
         except Exception as e:
             return Response({"Error Details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-class ADS(APIView):
-    """
-    API endpoint for retrieving products associated with the authenticated user.
-    Requires authentication.
-    """
+from django.shortcuts import get_object_or_404
 
+class ADS(APIView):
     permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def get(self, request):
-        """
-        Get the list of products associated with the authenticated user.
-
-        Returns:
-            Response: A JSON response with the serialized list of user products.
-        """
         user_id = request.user.id
 
         # Ensure user_id is provided in the request
         if not user_id:
-            return Response({"error": "User ID is required in the request data."}, status=400)
+            return Response({"error": "User ID is required in the request data."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Use get_object_or_404 to handle User.DoesNotExist exception
         user = get_object_or_404(User, pk=user_id)
 
-        # Use select_related to fetch related data in a single query
-        queryset = UserProducts.objects.filter(username=user).select_related('product')
+        # Use filter to fetch related data and then serialize
+        queryset = UserProducts.objects.filter(username=user)
         serializer = UserProductsSerializer(queryset, many=True)
 
-        return Response(serializer.data, status=200)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    
+    
+class Favourite(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+    
+    def post(self, request):
+        # Assuming the product_id is sent in the request data
+        product_id = request.data.get('product_id')
+        
+        try:
+            # Assuming you have a method to get the current user
+            user = request.user
+            
+            # Assuming you have a method to get the product based on the product_id
+            product = UserProducts.objects.get(id=product_id)
+            
+            # Check if the user already has the product in favorites
+            if FavouritesSaved.objects.filter(user=user, product=product).exists():
+                return Response({"error": "Product is already in your favorites"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create a new FavouritesSaved instance
+            favourite = FavouritesSaved.objects.create(user=user, product=product)
+            
+            # You might want to serialize the created instance if needed
+            serializer = UserProductsSerializer(instance=favourite)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except UserProducts.DoesNotExist:
+            return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+class OrderView(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def post(self, request):
+        # Assuming the product_id and purchased_quantity are sent in the request data
+        product_id = request.data.get('product_id')
+        purchased_quantity = request.data.get('purchased_quantity')
+
+        try:
+            user = request.user
+            product = UserProducts.objects.get(id=product_id)
+
+            # Create a new Order instance
+            order = Order.objects.create(user=user, product=product, purchased_quantity=purchased_quantity)
+            order.activate_order = "active order"
+            # You might want to serialize the created instance if needed
+            serializer = OrderSerializer(instance=order)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except UserProducts.DoesNotExist:
+            return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from core.models import ProductImage, UserProducts
+from core.models import FavouritesSaved, Order, ProductImage, UserProducts
 from rest_framework.authtoken.models import Token
 
 class CreateUserSearializer(serializers.ModelSerializer):
@@ -90,11 +90,12 @@ class ProductImageSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProducts
-        fields = ["product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity"]
+        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity"]
 
     def create(self, validated_data):
         # Extract the 'product_title' field from validated data
         product_title = validated_data.pop('product_title')
+        user_image = validated_data.pop('user_image', None)
         product_description = validated_data.pop('product_description')
         condition = validated_data.pop('condition')
         brand = validated_data.pop('brand')
@@ -113,6 +114,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
         # Create the instance with the remaining validated data
         instance = self.Meta.model(**validated_data)
+        instance.user_image = user_image
         instance.product_title = product_title
         instance.product_description = product_description
         instance.brand = brand
@@ -171,8 +173,33 @@ class UserProductsSerializer(serializers.ModelSerializer):
         
         
 class Useraddsearializer(serializers.ModelSerializer):
-    product_image = ProductImageSerializer(many=True, read_only=True)
+    product = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = UserProducts
+        fields = '__all__'
+
+class Userfavouriteproduct(serializers.ModelSerializer):
+    product = UserProductsSerializer()  # Remove many=True
+
+    class Meta:
+        model = FavouritesSaved
+        fields = ('user', 'product', 'saved_at')
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        product_data = validated_data['product']
+
+        # Assuming product_data is a dictionary containing UserProducts data
+        # If product_data is a UserProducts instance, you can use it directly
+        product_instance = UserProducts.objects.create(**product_data)
+
+        # Create and return the FavouritesSaved instance
+        return FavouritesSaved.objects.create(user=user, product=product_instance)
+    
+    
+class OrderSerializer(serializers.ModelSerializer):
+    product= UserProductsSerializer()
+    class Meta:
+        model = Order
         fields = '__all__'

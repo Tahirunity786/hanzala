@@ -1,5 +1,5 @@
 from django.contrib import admin
-from core.models import UserProducts, ProductImage, UserProfile,Order,   FavouritesSaved, Reviews
+from core.models import UserProducts, ProductImage,Order,FavouritesSaved, Reviews
 
 
 class ProductImageInline(admin.TabularInline):  # or admin.StackedInline
@@ -11,7 +11,7 @@ class UserProductsAdmin(admin.ModelAdmin):
 
 admin.site.register(UserProducts)
 admin.site.register(ProductImage)
-admin.site.register(UserProfile)
+# admin.site.register(UserProfile)
 admin.site.register(Order)
 admin.site.register(FavouritesSaved)
 admin.site.register(Reviews)
