@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.shortcuts import get_object_or_404
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, ProductSerializer, UserProductsSerializer,Useraddsearializer
+from core.serializers import CreateUserSearializer, ProductImageSerializer, ProductSerializer, UserProductsSerializer,Useraddsearializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
@@ -14,7 +15,8 @@ from core.models import ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
 from rest_framework import viewsets
-
+from collections import defaultdict
+from django.db.models import Prefetch
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -147,7 +149,7 @@ class ProductAPIView(APIView):
             product = serializer.save()
 
             # Set the user for the product
-            username = request.data.get('username', None)
+            username = request.user
             user = User.objects.filter(username=username).first()
             if user:
                 product.username = user
@@ -172,6 +174,7 @@ class ProductAPIView(APIView):
             response_data = {
                 "success": "Your product was added successfully",
                 "product": {
+                    "product_category": product.category,
                     "product_id": product.id,
                     "product_token": str(product.product_token),
                     "product_images": images,
@@ -184,6 +187,8 @@ class ProductAPIView(APIView):
                     "product_ram": product.ram,
                     "product_storage": product.storage,
                     "product_battery_capacity": product.battery_capacity,
+                    "product_price": product.price,
+                    
                 }
             }
 
@@ -191,29 +196,63 @@ class ProductAPIView(APIView):
         else:
             return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
 
-class UserProductsViewSet(viewsets.ModelViewSet):
-    queryset = UserProducts.objects.all()
-    serializer_class = UserProductsSerializer
-    renderer_classes = [UserRenderer]
-    
-    
 
-
-class ADS(APIView):
-    permission_classes = [IsAuthenticated]
+class UserProductsViewSet(APIView):
 
     def get(self, request):
+        try:
+            # Fetch all products and product images with optimized queries
+            all_products = UserProducts.objects.select_related('username').prefetch_related(
+                Prefetch('product_image', queryset=ProductImage.objects.all())
+            ).all()
+
+            # Use defaultdict to simplify code
+            category_mapping = defaultdict(list)
+
+            # Loop through products and serialize data
+            for product in all_products:
+                serialized_product = UserProductsSerializer(product).data
+                serialized_images = ProductImageSerializer(product.product_image.all(), many=True).data
+
+                category_mapping[product.category.lower()].append({
+              
+                    **serialized_product,
+                })
+
+            response_data = dict(category_mapping)
+
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"Error Details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ADS(APIView):
+    """
+    API endpoint for retrieving products associated with the authenticated user.
+    Requires authentication.
+    """
+
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def get(self, request):
+        """
+        Get the list of products associated with the authenticated user.
+
+        Returns:
+            Response: A JSON response with the serialized list of user products.
+        """
         user_id = request.user.id
-        
+
+        # Ensure user_id is provided in the request
         if not user_id:
             return Response({"error": "User ID is required in the request data."}, status=400)
 
-        try:
-            user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
+        # Use get_object_or_404 to handle User.DoesNotExist exception
+        user = get_object_or_404(User, pk=user_id)
 
-        queryset = UserProducts.objects.filter(username=user)
+        # Use select_related to fetch related data in a single query
+        queryset = UserProducts.objects.filter(username=user).select_related('product')
         serializer = UserProductsSerializer(queryset, many=True)
 
         return Response(serializer.data, status=200)
+

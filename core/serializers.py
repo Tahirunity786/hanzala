@@ -90,7 +90,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProducts
-        fields = ["product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage", "battery_capacity"]
+        fields = ["product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity"]
 
     def create(self, validated_data):
         # Extract the 'product_title' field from validated data
@@ -103,6 +103,12 @@ class ProductSerializer(serializers.ModelSerializer):
         ram = validated_data.pop('ram')
         storage = validated_data.pop('storage')
         battery_capacity = validated_data.pop('battery_capacity')
+        category = validated_data.pop('category')
+        price = validated_data.pop('price')
+        
+        # optimizing category
+        category_string = category.replace(" ", "")
+        category_string = category_string.lower()
        
 
         # Create the instance with the remaining validated data
@@ -116,6 +122,8 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.ram = ram
         instance.storage = storage
         instance.battery_capacity = battery_capacity
+        instance.category = category_string
+        instance.price = price
         instance.save()
 
         return instance

@@ -6,32 +6,21 @@ class ProductImage(models.Model):
     image = models.ImageField(upload_to='product_images/', verbose_name="Product Image")
 
 class UserProducts(models.Model):
-    CONDITION_CHOICES = [
-        ("New with tags", "New with tags"),
-        ("New without tags", "New without tags"),
-        ("Very Good", "Very Good"),
-        ("Good", "Good"),
-        ("Satisfactory", "Satisfactory"),
-    ]
-    BRAND_CHOICES = [
-        ("Nokia", "Nokia"),
-        ("Iphone", "Iphone"),
-        ("Sumsung", "Sumsung"),
-        ("Opps", "Opps"),
-        ("Vivo", "Vivo"),
-    ]
+    category = models.CharField(max_length=100, default=None)
+  
     username = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products_created", default="", blank=True, null=True)
     product_image = models.ManyToManyField(ProductImage, related_name="products_images", blank=True)
     product_token = models.CharField(max_length=200, default=None, db_index=True, blank=True, null=True)
-    product_title = models.CharField(max_length=150, default=None, db_index=True, unique=True)
+    product_title = models.CharField(max_length=150, default=None, db_index=True)
     product_description = models.TextField(verbose_name="Product Description", default=None,)
-    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES, default="Not decided", verbose_name="Condition")
-    brand = models.CharField(max_length=20, choices=BRAND_CHOICES, default="Not decided", verbose_name="Brand", db_index=True)
+    condition = models.CharField(max_length=20, default="Not decided", verbose_name="Condition")
+    brand = models.CharField(max_length=100, default="Not decided", verbose_name="Brand", db_index=True)
     color = models.CharField(max_length=100, default=None)
     model = models.CharField(max_length=100, default=None)
     ram = models.CharField(max_length=100, default=None)
     storage = models.BigIntegerField(default=0)
     battery_capacity = models.CharField(max_length=20, default=None)
+    price = models.IntegerField(default=None)
     
     def __str__(self):
         return f"{self.product_title} - {self.product_token}"
