@@ -273,7 +273,7 @@ class Favourite(APIView):
             favourite = FavouritesSaved.objects.create(user=user, product=product)
             
             # You might want to serialize the created instance if needed
-            serializer = UserProductsSerializer(instance=favourite)
+            serializer = Userfavouriteproduct(instance=favourite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except UserProducts.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
