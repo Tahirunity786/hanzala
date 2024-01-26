@@ -43,6 +43,7 @@ class Order(models.Model):
     received_order = models.CharField(max_length=100,default=False, db_index=True)
     canceled_order = models.CharField(max_length=100,default=False, db_index=True)
     purchased_quantity = models.IntegerField(default=None, db_index=True)
+    total_price = models.IntegerField(default=0)
 
     def __str__(self):
         return f"Order #{self.id} - {self.user.username} - {self.product.product_title}"
@@ -65,9 +66,9 @@ class FavouritesSaved(models.Model):
 
 class Reviews(models.Model):
     reviews_giver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reviews_given")
+    review_at_product = models.ForeignKey(UserProducts, on_delete=models.CASCADE, related_name="reviews_at_product", null=True)
+    reviews = models.IntegerField(default=0)
     reviewer_message = models.TextField(verbose_name="Message")
-    
-    def __str__(self):
-        return f"{self.reviews_giver.username} has given {self.reviewer_message}"
+    review_given_at = models.DateTimeField(auto_now=True)
 
 

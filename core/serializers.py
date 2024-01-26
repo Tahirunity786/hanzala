@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from core.models import FavouritesSaved, Order, ProductImage, UserProducts
+from core.models import FavouritesSaved, Order, ProductImage, Reviews, UserProducts
 from rest_framework.authtoken.models import Token
 
 class CreateUserSearializer(serializers.ModelSerializer):
@@ -203,3 +203,9 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+        
+        
+class ReviewsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reviews
+        fields = ('reviews_giver', 'review_at_product', 'reviews', 'reviewer_message', 'review_given_at')

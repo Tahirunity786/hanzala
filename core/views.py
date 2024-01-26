@@ -5,7 +5,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, UserProductsSerializer,Useraddsearializer, Userfavouriteproduct
+from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer,Useraddsearializer, Userfavouriteproduct
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
@@ -17,6 +17,8 @@ from django.contrib.auth.models import User
 from rest_framework import viewsets
 from collections import defaultdict
 from django.db.models import Prefetch
+from core.models import Reviews
+from rest_framework import generics
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -303,3 +305,93 @@ class OrderView(APIView):
         except UserProducts.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+class ReviewsCreateAPIView(generics.CreateAPIView):
+    serializer_class = ReviewsSerializer
+
+    def create(self, request, *args, **kwargs):
+        # Extract data from the request
+        reviews_giver = request.user  # Assuming you have authentication set up
+        product_id = request.data.get('product_id')
+
+        try:
+            review_at_product = UserProducts.objects.get(id=product_id)
+        except UserProducts.DoesNotExist:
+            return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Create a mutable copy of request.data
+        mutable_data = request.data.copy()
+
+        # Add reviews_giver and review_at_product to the mutable data
+        mutable_data['reviews_giver'] = reviews_giver.id
+        mutable_data['review_at_product'] = review_at_product.id
+
+        # Create the review instance
+        serializer = self.get_serializer(data=mutable_data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    
+class ShowFavourite(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def get(self, request):
+        user_id = request.user.id
+
+        # Ensure user_id is provided in the request
+        if not user_id:
+            return Response({"error": "User ID is required in the request data."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use get_object_or_404 to handle User.DoesNotExist exception
+        user = get_object_or_404(User, pk=user_id)
+
+        # Use filter to fetch related data and then serialize
+        queryset = Favourite.objects.filter(user=user)
+        serializer = Userfavouriteproduct(queryset, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ShowOrder(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def get(self, request):
+        user_id = request.user.id
+
+        # Ensure user_id is provided in the request
+        if not user_id:
+            return Response({"error": "User ID is required in the request data."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use get_object_or_404 to handle User.DoesNotExist exception
+        user = get_object_or_404(User, pk=user_id)
+
+        # Use filter to fetch related data and then serialize
+        queryset = Order.objects.filter(user=user)
+        serializer = OrderSerializer(queryset, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+class ShowReviews(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def get(self, request):
+        user_id = request.user.id
+
+        # Ensure user_id is provided in the request
+        if not user_id:
+            return Response({"error": "User ID is required in the request data."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use get_object_or_404 to handle User.DoesNotExist exception
+        user = get_object_or_404(User, pk=user_id)
+
+        # Use filter to fetch related data and then serialize
+        queryset = Reviews.objects.filter(reviews_giver=user)
+        serializer = ReviewsSerializer(queryset, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
