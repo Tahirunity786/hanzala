@@ -395,3 +395,39 @@ class ShowReviews(APIView):
         serializer = ReviewsSerializer(queryset, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+class ProductSearchView(generics.ListAPIView):
+    serializer_class = UserProductsSerializer
+    max_title_length = 200  # Set your maximum title length here
+
+    def get_queryset(self):
+        brand_name = self.request.query_params.get('brand', None)
+        product_title = self.request.query_params.get('title', None)
+
+        queryset = UserProducts.objects.all()
+
+        if brand_name:
+            queryset = queryset.filter(brand__icontains=brand_name)
+
+        if product_title:
+            if len(product_title) > self.max_title_length:
+                raise ValueError("Product title is too long.")
+            queryset = queryset.filter(product_title__icontains=product_title)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            
+            if not serializer.data:
+                return Response({"detail": "No matching products found."}, status=status.HTTP_404_NOT_FOUND)
+
+            return Response(serializer.data)
+        except ValueError as ve:
+            return Response({"detail": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": "An error occurred while processing your request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
