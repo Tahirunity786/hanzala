@@ -209,3 +209,6 @@ class ReviewsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reviews
         fields = ('reviews_giver', 'review_at_product', 'reviews', 'reviewer_message', 'review_given_at')
+
+class DeleteProductSerializer(serializers.Serializer):
+    id = serializers.IntegerField()

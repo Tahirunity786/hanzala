@@ -5,11 +5,11 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer,Useraddsearializer, Userfavouriteproduct
+from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 import uuid
 from core.models import FavouritesSaved, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -19,6 +19,7 @@ from collections import defaultdict
 from django.db.models import Prefetch
 from core.models import Reviews
 from rest_framework import generics
+from django.shortcuts import get_object_or_404
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -199,6 +200,26 @@ class ProductAPIView(APIView):
         else:
             return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
 
+class DeleteProductView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = DeleteProductSerializer(data=request.data)
+        if serializer.is_valid():
+            product_token = serializer.validated_data.get('id')
+            
+
+            # Find the product
+            product = UserProducts.objects.filter(id=product_token, username=request.user).first()
+
+            if product:
+                product.delete()
+                return Response({"detail": "Product deleted successfully"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": "Product not found or you don't have permission to delete it"}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"error": "Invalid input data"}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserProductsViewSet(APIView):
 
@@ -228,7 +249,7 @@ class UserProductsViewSet(APIView):
         except Exception as e:
             return Response({"Error Details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-from django.shortcuts import get_object_or_404
+
 
 class ADS(APIView):
     permission_classes = [IsAuthenticated]
@@ -398,36 +419,42 @@ class ShowReviews(APIView):
     
     
     
-class ProductSearchView(generics.ListAPIView):
-    serializer_class = UserProductsSerializer
-    max_title_length = 200  # Set your maximum title length here
+class ProductSearchView(generics.CreateAPIView):
+    permission_classes = [AllowAny]
 
-    def get_queryset(self):
-        brand_name = self.request.query_params.get('brand', None)
-        product_title = self.request.query_params.get('title', None)
-
-        queryset = UserProducts.objects.all()
-
-        if brand_name:
-            queryset = queryset.filter(brand__icontains=brand_name)
-
-        if product_title:
-            if len(product_title) > self.max_title_length:
-                raise ValueError("Product title is too long.")
-            queryset = queryset.filter(product_title__icontains=product_title)
-
-        return queryset
-
-    def list(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         try:
-            queryset = self.get_queryset()
-            serializer = self.get_serializer(queryset, many=True)
-            
-            if not serializer.data:
-                return Response({"detail": "No matching products found."}, status=status.HTTP_404_NOT_FOUND)
+            brand_name = request.data.get('brand', None)
+            product_title = request.data.get('title', None)
+           
 
-            return Response(serializer.data)
+            # Check if either brand_name or product_title is provided
+            if brand_name is None and product_title is None:
+                return Response({"Error": "At least one query (brand or title) should be provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = UserProducts.objects.all()
+
+            if brand_name:
+                queryset = queryset.filter(brand__icontains=brand_name)
+
+            if product_title:
+                max_title_length = 200  # Set your maximum title length here
+                if len(product_title) > max_title_length:
+                    raise ValueError("Product title is too long.")
+                queryset = queryset.filter(product_title__icontains=product_title)
+
+            # Check if queryset is empty after filtering
+            if not queryset.exists():
+                return Response({"Error": "No matching products found"}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = UserProductsSerializer(queryset, many=True)
+            
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
         except ValueError as ve:
             return Response({"detail": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"detail": "An error occurred while processing your request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
