@@ -172,3 +172,12 @@ CORS_ALLOWED_ORIGINS = [
    
     "http://127.0.0.1:8000",
 ]
+
+# Firebase configurations
+FIREBASE_CONFIG = {
+    'apiKey': 'BMIxaJIcvlz_9FYXzYhgY90cEwuBqml96ql1e2E4KZGdf9JuNpXNsJpKEYfDbCfXl9BG2cf2V36GiJuG4Q-uzaE',
+    'projectId': 'hanzala-ab5c5',
+    'messagingSenderId': '934959152479',
+    'appId': '1:934959152479:android:c326cbee6040e7b2958aea',
+    
+}

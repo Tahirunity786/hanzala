@@ -1,11 +1,11 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from core.views import CreateUserView, UserLoginView, ProductAPIView, UserProductsViewSet,ADS, Favourite,OrderView,ReviewsCreateAPIView,ShowFavourite,ShowOrder,ShowReviews, ProductSearchView, DeleteProductView
-
+from core.views import CreateUserView, UserLoginView, ProductAPIView, UserProductsViewSet,ADS, Favourite,OrderView,ReviewsCreateAPIView,ShowFavourite,ShowOrder,ShowReviews, ProductSearchView, DeleteProductView,SendNotificationView
 router = DefaultRouter()
 
 
 urlpatterns = [
+    path("public/notification", SendNotificationView.as_view(), name="Register"),
     path("public/u/create", CreateUserView.as_view(), name="Register"),
     path('public/u/login', UserLoginView.as_view(), name="Login"),
     path('public/product/create', ProductAPIView.as_view(), name="CreateProduct"),

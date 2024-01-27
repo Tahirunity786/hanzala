@@ -1,3 +1,4 @@
+import os
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
@@ -14,12 +15,21 @@ import uuid
 from core.models import FavouritesSaved, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
-from rest_framework import viewsets
+from django.conf import settings
 from collections import defaultdict
 from django.db.models import Prefetch
 from core.models import Reviews
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
+from firebase_admin import credentials
+import firebase_admin
+credential_path = os.path.join(settings.BASE_DIR, "hanzala-ab5c5-firebase-adminsdk-rg84h-7490b8f388.json")
+
+cred = credentials.Certificate(credential_path)
+firebase_admin.initialize_app(cred)
+
+
+from firebase_admin import messaging
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -457,4 +467,24 @@ class ProductSearchView(generics.CreateAPIView):
             return Response({"detail": "An error occurred while processing your request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
+class SendNotificationView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request, *args, **kwargs):
+        token = request.data.get('token')
+        title = request.data.get('title')
+        body = request.data.get('body')
+
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=title,
+                body=body,
+            ),
+            token=token,
+        )
+        messaging.send(message)
+
+        return Response({'message': 'Notification sent successfully'}, status=status.HTTP_200_OK)
+    
 
