@@ -181,3 +181,7 @@ FIREBASE_CONFIG = {
     'appId': '1:934959152479:android:c326cbee6040e7b2958aea',
     
 }
+
+
+GOOGLE_OAUTH2_CLIENT_ID= "934959152479-ok48plero1lfjtpnijjgumqlo8sh0k7c.apps.googleusercontent.com"
+GOOGLE_OAUTH2_CLIENT_SECRET= "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"

@@ -6,13 +6,13 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
 from rest_framework.permissions import IsAuthenticated, AllowAny
 import uuid
-from core.models import FavouritesSaved, Order, ProductImage, UserProducts
+from core.models import FavouritesSaved, Message, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
 from django.conf import settings
@@ -21,15 +21,12 @@ from django.db.models import Prefetch
 from core.models import Reviews
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
-from firebase_admin import credentials
-import firebase_admin
-credential_path = os.path.join(settings.BASE_DIR, "hanzala-ab5c5-firebase-adminsdk-rg84h-7490b8f388.json")
-
-cred = credentials.Certificate(credential_path)
-firebase_admin.initialize_app(cred)
-
-
-from firebase_admin import messaging
+from core.notification import send_message
+from django.db.models import Subquery,OuterRef, Q, F
+from rest_framework import serializers
+from core.mixins import ApiErrorsMixin, PublicApiMixin
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from core.utiles import google_get_access_token, google_get_user_info
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -84,6 +81,7 @@ class CreateUserView(APIView):
         else:
             error_data = serializer.errors
             return Response(error_data, status=status.HTTP_406_NOT_ACCEPTABLE)
+
              
 class UserLoginView(APIView):
     """
@@ -209,15 +207,44 @@ class ProductAPIView(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
         else:
             return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+
 
 class DeleteProductView(APIView):
+    """
+    API endpoint for deleting a user's product.
+
+    Requires authentication.
+
+    Request Format:
+    {
+        "id": "product_token"
+    }
+
+    Response:
+    - 200 OK: Product deleted successfully
+    - 404 Not Found: Product not found or user doesn't have permission to delete it
+    - 400 Bad Request: Invalid input data
+    """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        """
+        Handle POST requests to delete a user's product.
+
+        Parameters:
+        - request: The HTTP request object.
+        - args: Additional positional arguments.
+        - kwargs: Additional keyword arguments.
+
+        Returns:
+        - Response: A JSON response indicating the result of the operation.
+        """
         serializer = DeleteProductSerializer(data=request.data)
+
         if serializer.is_valid():
             product_token = serializer.validated_data.get('id')
-            
 
             # Find the product
             product = UserProducts.objects.filter(id=product_token, username=request.user).first()
@@ -231,7 +258,13 @@ class DeleteProductView(APIView):
             return Response({"error": "Invalid input data"}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
 class UserProductsViewSet(APIView):
+    """
+    API endpoint for retrieving user products grouped by category.
+
+    This endpoint fetches all products along with their images and categorizes them by the product category.
+    """
 
     def get(self, request):
         try:
@@ -245,27 +278,49 @@ class UserProductsViewSet(APIView):
 
             # Loop through products and serialize data
             for product in all_products:
+                # Serialize product data
                 serialized_product = UserProductsSerializer(product).data
+
+                # Serialize product images data
                 serialized_images = ProductImageSerializer(product.product_image.all(), many=True).data
 
+                # Append serialized product data to the corresponding category
                 category_mapping[product.category.lower()].append({
-              
                     **serialized_product,
                 })
 
+            # Create a dictionary to hold the response data
             response_data = dict(category_mapping)
 
+            # Return the categorized product data as a JSON response
             return Response(response_data, status=status.HTTP_200_OK)
+
         except Exception as e:
+            # Return an error response if an exception occurs
             return Response({"Error Details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
+
 class ADS(APIView):
+    """
+    API endpoint for retrieving products associated with the authenticated user.
+
+    Method: GET
+    Permission: IsAuthenticated (User must be logged in to access this endpoint)
+    Renderer: UserRenderer (Custom renderer for user-specific responses)
+    """
+
     permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def get(self, request):
+        """
+        Handle GET request to retrieve products associated with the authenticated user.
+
+        :param request: Django request object
+        :return: Response containing serialized user products data
+        """
         user_id = request.user.id
 
         # Ensure user_id is provided in the request
@@ -284,60 +339,134 @@ class ADS(APIView):
     
     
 class Favourite(APIView):
+    """
+    API endpoint for managing user favorites.
+
+    Permissions:
+        - User must be authenticated to access this endpoint.
+
+    Request:
+        - POST: Add a product to the user's favorites.
+
+    Response:
+        - 201 Created: Product successfully added to favorites.
+        - 400 Bad Request: Product is already in user's favorites.
+        - 404 Not Found: Product not found.
+    """
+
     permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
-    
+
     def post(self, request):
+        """
+        Add a product to the user's favorites.
+
+        Args:
+            request: Django Rest Framework request object.
+
+        Returns:
+            Response: JSON response containing the serialized favorite product or an error message.
+
+        Raises:
+            UserProducts.DoesNotExist: If the specified product does not exist.
+        """
+
         # Assuming the product_id is sent in the request data
         product_id = request.data.get('product_id')
-        
+
         try:
             # Assuming you have a method to get the current user
             user = request.user
-            
+
             # Assuming you have a method to get the product based on the product_id
             product = UserProducts.objects.get(id=product_id)
-            
+
             # Check if the user already has the product in favorites
             if FavouritesSaved.objects.filter(user=user, product=product).exists():
-                return Response({"error": "Product is already in your favorites"}, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response(
+                    {"error": "Product is already in your favorites"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Create a new FavouritesSaved instance
             favourite = FavouritesSaved.objects.create(user=user, product=product)
-            
+
             # You might want to serialize the created instance if needed
             serializer = Userfavouriteproduct(instance=favourite)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         except UserProducts.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 
 class OrderView(APIView):
+    """
+    API endpoint for creating orders.
+
+    Requires authentication.
+
+    Supports HTTP POST request to create a new order.
+    """
+
     permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def post(self, request):
-        # Assuming the product_id and purchased_quantity are sent in the request data
+        """
+        Create a new order.
+
+        Parameters:
+        - product_id (int): The ID of the product to be ordered.
+        - purchased_quantity (int): The quantity of the product to be purchased.
+
+        Returns:
+        - Response: Serialized order data if successful, error response otherwise.
+        """
+
+        # Extract data from the request
         product_id = request.data.get('product_id')
         purchased_quantity = request.data.get('purchased_quantity')
 
         try:
+            # Get the authenticated user
             user = request.user
+
+            # Retrieve the product based on the provided product_id
             product = UserProducts.objects.get(id=product_id)
 
             # Create a new Order instance
             order = Order.objects.create(user=user, product=product, purchased_quantity=purchased_quantity)
             order.activate_order = "active order"
-            # You might want to serialize the created instance if needed
+
+            # Serialize the created order instance
             serializer = OrderSerializer(instance=order)
+
+            # Return a successful response with serialized order data
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except UserProducts.DoesNotExist:
+            # Return a 404 error response if the specified product does not exist
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+
 class ReviewsCreateAPIView(generics.CreateAPIView):
+    """
+    API endpoint for creating product reviews.
+
+    This endpoint allows an authenticated user to submit a review for a specific product.
+
+    Request Payload:
+        - product_id: The ID of the product for which the review is being submitted.
+
+    Response:
+        - Returns the serialized data of the created review.
+
+    Note:
+        - Assumes user authentication is set up.
+    """
+
     serializer_class = ReviewsSerializer
 
     def create(self, request, *args, **kwargs):
@@ -348,7 +477,7 @@ class ReviewsCreateAPIView(generics.CreateAPIView):
         try:
             review_at_product = UserProducts.objects.get(id=product_id)
         except UserProducts.DoesNotExist:
-            return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'Error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Create a mutable copy of request.data
         mutable_data = request.data.copy()
@@ -366,10 +495,26 @@ class ReviewsCreateAPIView(generics.CreateAPIView):
     
     
 class ShowFavourite(APIView):
+    """
+    API endpoint to retrieve a user's favorite products.
+
+    Requires authentication. Returns a list of favorite products associated with the user.
+
+    Endpoint: GET /api/show-favorite/
+    """
+
     permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def get(self, request):
+        """
+        Handles GET requests to retrieve the user's favorite products.
+
+        :param request: The HTTP GET request.
+        :return: Response with a list of serialized favorite products.
+        """
+
+        # Extract user ID from the authenticated user
         user_id = request.user.id
 
         # Ensure user_id is provided in the request
@@ -385,11 +530,51 @@ class ShowFavourite(APIView):
 
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+    
+    
 class ShowOrder(APIView):
+    """
+    API endpoint to retrieve orders for the authenticated user.
+
+    Requires authentication using Token or other authentication methods.
+    
+    Returns a JSON array of orders associated with the authenticated user.
+
+    Response Format:
+    [
+        {
+            "id": 1,
+            "product_name": "Product A",
+            "quantity": 2,
+            "total_price": 20.0,
+            "created_at": "2024-01-27T12:00:00Z",
+            "updated_at": "2024-01-27T12:30:00Z"
+        },
+        {
+            "id": 2,
+            "product_name": "Product B",
+            "quantity": 1,
+            "total_price": 15.0,
+            "created_at": "2024-01-27T14:00:00Z",
+            "updated_at": "2024-01-27T14:15:00Z"
+        },
+        ...
+    ]
+    """
+
     permission_classes = [IsAuthenticated]
-    renderer_classes = [UserRenderer]
+    renderer_classes = [UserRenderer]  # Make sure to replace with your actual renderer
 
     def get(self, request):
+        """
+        Handle GET requests to retrieve orders for the authenticated user.
+
+        Args:
+        - request: The HTTP request object.
+
+        Returns:
+        - Response: A JSON response containing a list of serialized orders.
+        """
         user_id = request.user.id
 
         # Ensure user_id is provided in the request
@@ -405,13 +590,27 @@ class ShowOrder(APIView):
 
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
-    
+
 class ShowReviews(APIView):
+    """
+    API endpoint to retrieve reviews given by the authenticated user.
+
+    Requires authentication.
+
+    
+    """
+
     permission_classes = [IsAuthenticated]
-    renderer_classes = [UserRenderer]
+    renderer_classes = [UserRenderer]  # Replace with your renderer, if needed
 
     def get(self, request):
+        """
+        Handle GET request to retrieve reviews given by the authenticated user.
+
+        Returns:
+            Response: Serialized reviews data in JSON format.
+        """
+
         user_id = request.user.id
 
         # Ensure user_id is provided in the request
@@ -428,63 +627,238 @@ class ShowReviews(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
-    
 class ProductSearchView(generics.CreateAPIView):
+    """
+    API endpoint for searching user products based on brand or title.
+
+    Permissions:
+        - AllowAny: No authentication required for searching.
+
+    Methods:
+        - POST: Search for products based on brand or title.
+    """
+
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        """
+        Handle POST requests for searching user products.
+
+        Parameters:
+            - request: The incoming HTTP request.
+            - args: Additional positional arguments.
+            - kwargs: Additional keyword arguments.
+
+        Returns:
+            - Response: JSON response containing the search results or error details.
+        """
         try:
+            # Retrieve brand_name and product_title from request data
             brand_name = request.data.get('brand', None)
             product_title = request.data.get('title', None)
-           
 
             # Check if either brand_name or product_title is provided
             if brand_name is None and product_title is None:
                 return Response({"Error": "At least one query (brand or title) should be provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Initialize the queryset with all user products
             queryset = UserProducts.objects.all()
 
+            # Apply filters based on brand_name
             if brand_name:
                 queryset = queryset.filter(brand__icontains=brand_name)
 
+            # Apply filters based on product_title
             if product_title:
-                max_title_length = 200  # Set your maximum title length here
+                # Set the maximum allowed title length
+                max_title_length = 200  
+
+                # Check if product_title exceeds the maximum allowed length
                 if len(product_title) > max_title_length:
                     raise ValueError("Product title is too long.")
+
+                # Apply filter for product_title
                 queryset = queryset.filter(product_title__icontains=product_title)
 
             # Check if queryset is empty after filtering
             if not queryset.exists():
                 return Response({"Error": "No matching products found"}, status=status.HTTP_404_NOT_FOUND)
 
+            # Serialize the queryset results
             serializer = UserProductsSerializer(queryset, many=True)
-            
+
+            # Return the serialized data in the response
             return Response(serializer.data, status=status.HTTP_200_OK)
         
         except ValueError as ve:
+            # Handle ValueError exceptions (e.g., product_title too long)
             return Response({"detail": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            # Handle other exceptions (e.g., generic exceptions)
             return Response({"detail": "An error occurred while processing your request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class SendNotificationView(APIView):
+    """
+    API endpoint for sending push notifications to a specific device.
+
+    Parameters:
+    - `token` (str): The FCM registration token of the target device.
+    - `title` (str): The title of the notification.
+    - `body` (str): The body/content of the notification.
+
+    Note: This endpoint does not require authentication (AllowAny permission).
+    """
+
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
-        token = request.data.get('token')
-        title = request.data.get('title')
-        body = request.data.get('body')
+        """
+        Handle POST requests for sending push notifications.
 
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=title,
-                body=body,
-            ),
-            token=token,
-        )
-        messaging.send(message)
+        Parameters:
+        - `token` (str): The FCM registration token of the target device.
+        - `title` (str): The title of the notification.
+        - `body` (str): The body/content of the notification.
 
-        return Response({'message': 'Notification sent successfully'}, status=status.HTTP_200_OK)
+        Returns:
+        - Response: JSON response indicating the success or failure of the notification sending process.
+        """
+        try:
+            token = request.data.get('token')
+            title = request.data.get('title')
+            body = request.data.get('body')
+            
+            is_sent = send_message(token, title, body)
+            if is_sent:
+                # Return a JSON response indicating success
+                return Response({'message': 'Notification sent successfully'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'Error': 'Notification not sent successfully'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"Error":e}, status=status.HTTP_400_BAD_REQUEST)       
+        
+
+class SendMsg(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+    
+    def post(self, request):
+        # Assuming the request data contains 'receiver_id' and 'content'
+        receiver_id = request.data.get('receiver_id')
+        content = request.data.get('content')
+
+        # Get the sender (current user) from the request
+        sender = request.user
+
+        # Check if the receiver exists
+        try:
+            receiver = User.objects.get(id=receiver_id)
+        except User.DoesNotExist:
+            return Response({"error": "Receiver does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the message
+        message = Message.objects.create(sender=sender, receiver=receiver, content=content)
+
+        # You might want to add additional logic here, such as updating unread counts, notifications, etc.
+
+        # Serialize the created message
+        serializer = MessageSerializer(message)
+
+        # Return the serialized data in the response
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+
+
+class SeeMessage(APIView):
+    """
+    API endpoint to view messages.
+
+    Requires the authenticated user to retrieve their messages.
+
+    Returns a list of serialized message data.
+    """
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def post(self, request):
+        """
+        Handle POST requests to retrieve messages for the authenticated user.
+
+        Parameters:
+        - request: The incoming request object.
+
+        Returns:
+        - Response: JSON response containing a list of serialized message data.
+        """
+        # Get the authenticated user from the request
+        user = request.user
+
+        # Retrieve messages for the authenticated user
+        messages = Message.objects.filter(Q(sender=user) | Q(receiver=user))
+
+        # Serialize the messages
+        serializer = MessageSerializer(messages, many=True)
+
+        # Return the serialized data in the response
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
 
+
+def generate_tokens_for_user(user):
+    """
+    Generate access and refresh tokens for the given user
+    """
+    serializer = TokenObtainPairSerializer()
+    token_data = serializer.get_token(user)
+    access_token = token_data.access_token
+    refresh_token = token_data
+    return access_token, refresh_token
+
+
+class GoogleLoginApi(APIView):
+    class InputSerializer(serializers.Serializer):
+        code = serializers.CharField(required=False)
+        error = serializers.CharField(required=False)
+        
+        
+        
+    permission_classes = [AllowAny]
+    
+    def post(self, request, *args, **kwargs):
+        input_serializer = self.InputSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        # print(input_serializer)
+        validated_data = input_serializer.validated_data
+
+        code = validated_data.get('code')
+        error = validated_data.get('error')
+    
+        access_token = google_get_access_token(code=code)
+
+        user_data = google_get_user_info(access_token=access_token)
+
+        try:
+            user = User.objects.get(email=user_data['email'])
+            access_token, refresh_token = generate_tokens_for_user(user)
+            response_data = {
+                'user': GoogleSerializer(user).data,
+                'access_token': str(access_token),
+                'refresh_token': str(refresh_token)
+            }
+            return Response(response_data, status=status.HTTP_202_ACCEPTED)
+        except User.DoesNotExist:
+            username = user_data['email'].split('@')[0]
+            user = User.objects.create(
+                username=username,
+                email=user_data['email'],
+            )
+         
+            access_token, refresh_token = generate_tokens_for_user(user)
+            response_data = {
+                'user': GoogleSerializer(user).data,
+                'access_token': str(access_token),
+                'refresh_token': str(refresh_token)
+            }
+            return Response(response_data)

@@ -72,3 +72,16 @@ class Reviews(models.Model):
     review_given_at = models.DateTimeField(auto_now=True)
 
 
+class Message(models.Model):
+    # user = models.ForeignKey(User, related_name='operated_by', on_delete=models.CASCADE, default=None)
+    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE, default=None)
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.sender} to {self.receiver}: {self.content}"
+    
+    
+  

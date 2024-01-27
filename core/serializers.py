@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from core.models import FavouritesSaved, Order, ProductImage, Reviews, UserProducts
+from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts
 from rest_framework.authtoken.models import Token
 
 class CreateUserSearializer(serializers.ModelSerializer):
@@ -212,3 +212,24 @@ class ReviewsSerializer(serializers.ModelSerializer):
 
 class DeleteProductSerializer(serializers.Serializer):
     id = serializers.IntegerField()
+    
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username')
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = UserSerializer()
+    receiver = UserSerializer()
+
+    class Meta:
+        model = Message
+        fields = ('id', 'sender', 'receiver', 'content', 'timestamp',)
+        
+class GoogleSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email']
