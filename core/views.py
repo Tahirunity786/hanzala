@@ -1,12 +1,10 @@
-import os
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
-from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer 
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
@@ -15,7 +13,6 @@ import uuid
 from core.models import FavouritesSaved, Message, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
-from django.conf import settings
 from collections import defaultdict
 from django.db.models import Prefetch
 from core.models import Reviews
@@ -27,6 +24,14 @@ from rest_framework import serializers
 from core.mixins import ApiErrorsMixin, PublicApiMixin
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from core.utiles import google_get_access_token, google_get_user_info
+
+
+
+
+
+
+
+
 # Create your views here.
 class CreateUserView(APIView):
     """
@@ -427,6 +432,11 @@ class OrderView(APIView):
         # Extract data from the request
         product_id = request.data.get('product_id')
         purchased_quantity = request.data.get('purchased_quantity')
+        payment_method = request.data.get('payment_method')
+        # For notification
+        device_token = request.data.get('device_token')
+        title = "Order Confirmed. "
+        body = "Thank you for your order. It will be delivered within 7 working days."
 
         try:
             # Get the authenticated user
@@ -436,12 +446,13 @@ class OrderView(APIView):
             product = UserProducts.objects.get(id=product_id)
 
             # Create a new Order instance
-            order = Order.objects.create(user=user, product=product, purchased_quantity=purchased_quantity)
+            order = Order.objects.create(user=user, product=product, purchased_quantity=purchased_quantity, payment_method=payment_method)
             order.activate_order = "active order"
 
             # Serialize the created order instance
             serializer = OrderSerializer(instance=order)
-
+            # Send a notification
+            send_message(device_token, body, title)
             # Return a successful response with serialized order data
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -525,7 +536,7 @@ class ShowFavourite(APIView):
         user = get_object_or_404(User, pk=user_id)
 
         # Use filter to fetch related data and then serialize
-        queryset = Favourite.objects.filter(user=user)
+        queryset = FavouritesSaved.objects.filter(user=user)
         serializer = Userfavouriteproduct(queryset, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -697,7 +708,6 @@ class ProductSearchView(generics.CreateAPIView):
             # Handle other exceptions (e.g., generic exceptions)
             return Response({"detail": "An error occurred while processing your request."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class SendNotificationView(APIView):
     """
     API endpoint for sending push notifications to a specific device.
@@ -730,14 +740,17 @@ class SendNotificationView(APIView):
             body = request.data.get('body')
             
             is_sent = send_message(token, title, body)
+            
             if is_sent:
                 # Return a JSON response indicating success
                 return Response({'message': 'Notification sent successfully'}, status=status.HTTP_200_OK)
             else:
-                return Response({'Error': 'Notification not sent successfully'}, status=status.HTTP_200_OK)
+                return Response({'error': 'Notification not sent successfully'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            return Response({"Error":e}, status=status.HTTP_400_BAD_REQUEST)       
-        
+            # Handle other exceptions
+            return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 class SendMsg(APIView):
     permission_classes = [IsAuthenticated]
@@ -794,9 +807,10 @@ class SeeMessage(APIView):
         """
         # Get the authenticated user from the request
         user = request.user
+        sender = request.data.get("reciever_id")
 
         # Retrieve messages for the authenticated user
-        messages = Message.objects.filter(Q(sender=user) | Q(receiver=user))
+        messages = Message.objects.filter(Q(sender=sender) | Q(receiver=user)).order_by("-id")
 
         # Serialize the messages
         serializer = MessageSerializer(messages, many=True)
@@ -862,3 +876,20 @@ class GoogleLoginApi(APIView):
                 'refresh_token': str(refresh_token)
             }
             return Response(response_data)
+        
+
+class UserInfo(APIView):
+    permission_classes = [IsAuthenticated]
+    renderer_classes = [UserRenderer]
+
+    def post(self, request):
+        serializer = InfouserSerializer(data=request.data, context={'request': request})
+
+        if serializer.is_valid():
+            try:
+                user_info = serializer.save()
+                return Response({"Success": "Information saved successfully."}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({'error': 'Invalid data provided'}, status=status.HTTP_400_BAD_REQUEST)

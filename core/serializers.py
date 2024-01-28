@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts
-from rest_framework.authtoken.models import Token
+from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts, Info_user
+
 
 class CreateUserSearializer(serializers.ModelSerializer):
     """
@@ -74,45 +74,82 @@ class CreateUserSearializer(serializers.ModelSerializer):
     
     
 class UserLoginSerializer(serializers.Serializer):
+    """
+    Serializer for user login.
+
+    Attributes:
+        password (str): The user's password.
+    """
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     class Meta:
         model = User
         fields = ['username', 'password']
-        
-        
-        
+
+
 class ProductImageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for product images.
+
+    Attributes:
+        product (int): The ID of the associated product.
+        image (str): The image URL or path.
+    """
     class Meta:
         model = ProductImage
         fields = ("product", "image")
 
+
 class ProductSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user products.
+
+    Attributes:
+        user_image (str): The user's image URL or path.
+        product_title (str): The title of the product.
+        product_description (str): The description of the product.
+        condition (str): The condition of the product.
+        brand (str): The brand of the product.
+        color (str): The color of the product.
+        model (str): The model of the product.
+        ram (int): The RAM size of the product.
+        storage (int): The storage capacity of the product.
+        battery_capacity (int): The battery capacity of the product.
+        category (str): The category of the product.
+        price (float): The price of the product.
+    """
     class Meta:
         model = UserProducts
         fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity"]
 
     def create(self, validated_data):
-        # Extract the 'product_title' field from validated data
-        product_title = validated_data.pop('product_title')
-        user_image = validated_data.pop('user_image', None)
-        product_description = validated_data.pop('product_description')
-        condition = validated_data.pop('condition')
-        brand = validated_data.pop('brand')
-        color = validated_data.pop('color')
-        model = validated_data.pop('model')
-        ram = validated_data.pop('ram')
-        storage = validated_data.pop('storage')
-        battery_capacity = validated_data.pop('battery_capacity')
-        category = validated_data.pop('category')
-        price = validated_data.pop('price')
-        
-        # optimizing category
-        category_string = category.replace(" ", "")
-        category_string = category_string.lower()
-       
+        """
+        Create and save a new UserProducts instance.
 
-        # Create the instance with the remaining validated data
+        Args:
+            validated_data (dict): Validated data for creating the instance.
+
+        Returns:
+            UserProducts: The created UserProducts instance.
+        """
+        # Extracting fields from validated data
+        product_title = validated_data.pop('product_title', None)
+        user_image = validated_data.pop('user_image', None)
+        product_description = validated_data.pop('product_description', None)
+        condition = validated_data.pop('condition', None)
+        brand = validated_data.pop('brand', None)
+        color = validated_data.pop('color', None)
+        model = validated_data.pop('model', None)
+        ram = validated_data.pop('ram', None)
+        storage = validated_data.pop('storage', None)
+        battery_capacity = validated_data.pop('battery_capacity', None)
+        category = validated_data.pop('category', None)
+        price = validated_data.pop('price', None)
+        
+        # Optimizing category
+        category_string = category.replace(" ", "").lower()
+
+        # Creating the instance with the remaining validated data
         instance = self.Meta.model(**validated_data)
         instance.user_image = user_image
         instance.product_title = product_title
@@ -130,8 +167,17 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return instance
 
-
     def update(self, instance, validated_data):
+        """
+        Update and save an existing UserProducts instance.
+
+        Args:
+            instance (UserProducts): The existing instance to be updated.
+            validated_data (dict): Validated data for updating the instance.
+
+        Returns:
+            UserProducts: The updated UserProducts instance.
+        """
         images_data = validated_data.pop('images', [])
         
         instance.product_title = validated_data.get('product_title', instance.product_title)
@@ -160,19 +206,29 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.delete()
         
 class ProductImageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the ProductImage model.
+    """
     class Meta:
         model = ProductImage
         fields = ('image',)
 
 class UserProductsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserProducts model.
+    Includes ProductImageSerializer as a nested serializer for the 'product_image' field.
+    """
     product_image = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = UserProducts
         fields = '__all__'
-        
-        
+
 class Useraddsearializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserProducts model (used for adding a user).
+    Includes ProductImageSerializer as a nested serializer for the 'product' field.
+    """
     product = ProductImageSerializer(many=True, read_only=True)
 
     class Meta:
@@ -180,6 +236,9 @@ class Useraddsearializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class Userfavouriteproduct(serializers.ModelSerializer):
+    """
+    Serializer for the FavouritesSaved model.
+    """
     product = UserProductsSerializer()  # Remove many=True
 
     class Meta:
@@ -187,6 +246,9 @@ class Userfavouriteproduct(serializers.ModelSerializer):
         fields = ('user', 'product', 'saved_at')
 
     def create(self, validated_data):
+        """
+        Custom create method to handle FavouritesSaved instance creation.
+        """
         user = validated_data['user']
         product_data = validated_data['product']
 
@@ -196,40 +258,85 @@ class Userfavouriteproduct(serializers.ModelSerializer):
 
         # Create and return the FavouritesSaved instance
         return FavouritesSaved.objects.create(user=user, product=product_instance)
-    
-    
+
 class OrderSerializer(serializers.ModelSerializer):
-    product= UserProductsSerializer()
+    """
+    Serializer for the Order model.
+    Includes UserProductsSerializer as a nested serializer for the 'product' field.
+    """
+    product = UserProductsSerializer()
+
     class Meta:
         model = Order
         fields = '__all__'
-        
-        
+
 class ReviewsSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Reviews model.
+    """
     class Meta:
         model = Reviews
         fields = ('reviews_giver', 'review_at_product', 'reviews', 'reviewer_message', 'review_given_at')
 
 class DeleteProductSerializer(serializers.Serializer):
+    """
+    Serializer for deleting a product.
+    """
     id = serializers.IntegerField()
-    
 
 class UserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the User model.
+    """
     class Meta:
         model = User
         fields = ('id', 'username')
 
-
 class MessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Message model.
+    Includes UserSerializer as nested serializers for the 'sender' and 'receiver' fields.
+    """
     sender = UserSerializer()
     receiver = UserSerializer()
 
     class Meta:
         model = Message
         fields = ('id', 'sender', 'receiver', 'content', 'timestamp',)
-        
+
 class GoogleSerializer(serializers.ModelSerializer):
-    
+    """
+    Serializer for the User model (used for Google login).
+    """
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email']
+        fields = ['username', 'email']
+
+class InfouserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Info_user model.
+    Includes fields for user information.
+    """
+    full_name = serializers.CharField(max_length=100, write_only=True)
+    country = serializers.CharField(max_length=100, write_only=True)
+    address1 = serializers.CharField(max_length=100, write_only=True)
+    postal_code = serializers.IntegerField(write_only=True)
+    latitude1 = serializers.CharField(max_length=100, write_only=True)
+    latitude1 = serializers.CharField(max_length=100, write_only=True)
+
+    class Meta:
+        model = Info_user
+        fields = ("full_name", "country", "address1", "address2", "postal_code", "latitude1", "latitude2")
+
+    def create(self, validated_data):
+        """
+        Custom create method to handle Info_user instance creation.
+        """
+        # Extract user from request
+        user = self.context['request'].user
+
+        # Include user in validated_data
+        validated_data['user'] = user
+
+        # Create and return the Info_user instance
+        return super(InfouserSerializer, self).create(validated_data)
