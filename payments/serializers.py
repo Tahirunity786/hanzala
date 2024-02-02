@@ -1,6 +1,9 @@
 import datetime
-
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from core.models import Order
+# from payments.models import Payment
+User = get_user_model()
 
 
 def check_expiry_month(value):
@@ -26,12 +29,12 @@ def check_payment_method(value):
 
 class CardInformationSerializer(serializers.Serializer):
     card_number = serializers.CharField(max_length=150, required=True)
-    expiry_month = serializers.CharField(
+    exp_month = serializers.CharField(
         max_length=150,
         required=True,
         validators=[check_expiry_month],
     )
-    expiry_year = serializers.CharField(
+    exp_year = serializers.CharField(
         max_length=150,
         required=True,
         validators=[check_expiry_year],
@@ -41,3 +44,15 @@ class CardInformationSerializer(serializers.Serializer):
         required=True,
         validators=[check_cvc],
     )
+    
+class Userserializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username')
+        
+        
+class PaymentSerializer(serializers.ModelSerializer):
+    user = Userserializer()
+    class Meta:
+        model = Order
+        fields = '__all__'

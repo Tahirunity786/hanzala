@@ -2,18 +2,20 @@
 from datetime import timedelta
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
+# Load environment variables from .env
+load_dotenv()
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-8omkx1j(k(v=o+=x6d+o#t6a#5*_z(jw^o4wuyldl=f4f!7@^)'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
@@ -31,11 +33,14 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'core.apps.CoreConfig',
     'payments.apps.PaymentsConfig',
+    'coreadmin.apps.CoreadminConfig',
     'rest_framework',
-    "corsheaders"
+    "corsheaders",
+    "fcm_django"
     
 ]
-
+APPEND_SLASH=False
+AUTH_USER_MODEL = 'core.User'
 REST_FRAMEWORK = {
 
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -144,11 +149,11 @@ SATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-EMAIL_HOST='smtp.gmail.com'
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER='tahirzaaman786@gmail.com'
-EMAIL_HOST_PASSWORD='gfwvpmkochhrwuhn'
+EMAIL_HOST= os.getenv('EMAIL_HOST')
+EMAIL_PORT= os.getenv('EMAIL_PORT')
+EMAIL_USE_TLS= os.getenv('EMAIL_USE_TLS')
+EMAIL_HOST_USER= os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD= os.getenv('EMAIL_HOST_PASSWORD')
 
 
 
@@ -165,13 +170,17 @@ CORS_ALLOWED_ORIGINS = [
 
 # Firebase configurations
 FIREBASE_CONFIG = {
-    'apiKey': 'BMIxaJIcvlz_9FYXzYhgY90cEwuBqml96ql1e2E4KZGdf9JuNpXNsJpKEYfDbCfXl9BG2cf2V36GiJuG4Q-uzaE',
-    'projectId': 'hanzala-ab5c5',
-    'messagingSenderId': '934959152479',
-    'appId': '1:934959152479:android:c326cbee6040e7b2958aea',
+    'apiKey': os.getenv('apiKey'),
+    'projectId': os.getenv('projectId'),
+    'messagingSenderId': os.getenv('messagingSenderId'),
+    'appId': os.getenv('appId'),
     
 }
 
 
-GOOGLE_OAUTH2_CLIENT_ID= "934959152479-ok48plero1lfjtpnijjgumqlo8sh0k7c.apps.googleusercontent.com"
-GOOGLE_OAUTH2_CLIENT_SECRET= "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"
+GOOGLE_OAUTH2_CLIENT_ID= os.getenv('GOOGLE_OAUTH2_CLIENT_ID')
+GOOGLE_OAUTH2_CLIENT_SECRET= os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET')
+
+STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY')
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')

@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts, Info_user
 
+User = get_user_model()
 
 class CreateUserSearializer(serializers.ModelSerializer):
     """
@@ -66,7 +67,10 @@ class CreateUserSearializer(serializers.ModelSerializer):
         account = User.objects.create_user(
             username=self.validated_data['username'],
             email=self.validated_data['email'],
-            password=self.validated_data['password']
+            password=self.validated_data['password'],
+            is_active = True,
+            is_verified=True,
+            is_buyer=True,
         )
 
         return account
@@ -120,7 +124,7 @@ class ProductSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = UserProducts
-        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity"]
+        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address']
 
     def create(self, validated_data):
         """
@@ -145,7 +149,10 @@ class ProductSerializer(serializers.ModelSerializer):
         battery_capacity = validated_data.pop('battery_capacity', None)
         category = validated_data.pop('category', None)
         price = validated_data.pop('price', None)
-        
+        latitude = validated_data.pop('latitude', None)
+        longitude = validated_data.pop('longitude', None)
+        product_address = validated_data.pop('product_address', None)
+
         # Optimizing category
         category_string = category.replace(" ", "").lower()
 
@@ -163,6 +170,10 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.battery_capacity = battery_capacity
         instance.category = category_string
         instance.price = price
+        instance.latitude = latitude
+        instance.longitude = longitude
+        instance.product_address = product_address
+        instance.total_price = 1
         instance.save()
 
         return instance
@@ -220,10 +231,20 @@ class UserProductsSerializer(serializers.ModelSerializer):
     """
     product_image = ProductImageSerializer(many=True, read_only=True)
 
+    # Add a new field 'username' to display the actual username
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = UserProducts
         fields = '__all__'
 
+    def get_username(self, obj):
+        """
+        Custom method to retrieve the username from the related User model.
+        """
+        return obj.username.username if obj.username else None
+    
+    
 class Useraddsearializer(serializers.ModelSerializer):
     """
     Serializer for the UserProducts model (used for adding a user).
@@ -340,3 +361,23 @@ class InfouserSerializer(serializers.ModelSerializer):
 
         # Create and return the Info_user instance
         return super(InfouserSerializer, self).create(validated_data)
+    
+
+
+class Seemessagesearializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Message
+        fields = ('id', 'content', 'timestamp')
+
+class notificationsearializer(serializers.Serializer):
+    title = serializers.CharField(max_length=150, required=True)
+    body = serializers.CharField(max_length=500, required=True)
+    token = serializers.CharField(max_length=500, required=True)
+
+
+class UserUpdatepassword(serializers.ModelSerializer):
+    password2 = serializers.CharField(require=True, write_only=True)
+    class Meta:
+        model = User
+        fields = ['password', 'password2']  

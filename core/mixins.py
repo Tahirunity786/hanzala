@@ -5,8 +5,8 @@ from rest_framework import exceptions as rest_exceptions
 from django.core.exceptions import ValidationError
 
 from core.utiles import get_error_message
-from django.contrib.auth.models import User
-
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class ApiAuthMixin:
     authentication_classes = (JWTAuthentication, )

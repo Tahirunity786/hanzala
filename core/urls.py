@@ -1,4 +1,5 @@
 from django.urls import path
+# from fcm_django.api.rest_framework import FCMDeviceAuthorizedViewSet
 from rest_framework.routers import DefaultRouter
 from core.views import (
     CreateUserView, 
@@ -23,7 +24,7 @@ from core.views import (
 
 # Create a DefaultRouter for automatic URL routing with ViewSets
 router = DefaultRouter()
-
+# router.register('devices', FCMDeviceAuthorizedViewSet)
 # Define individual paths for your views
 urlpatterns = [
     # Public notification endpoint

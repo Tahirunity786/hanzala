@@ -22,5 +22,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('faxfone/', include('core.urls')),
     path('checkout/', include('payments.urls')),
+    path('faxfone-admin/', include('coreadmin.urls')),
  
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

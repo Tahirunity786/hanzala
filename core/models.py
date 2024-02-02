@@ -1,5 +1,31 @@
 from django.db import models
-from django.contrib.auth.models import User
+from core.manager import CustomUserManager
+from django.contrib.auth.models import AbstractUser,Group, Permission
+
+
+
+class User(AbstractUser):
+    # General Information about the user
+    profile = models.ImageField(upload_to="profile/images", blank=True, null=True)
+    full_name = models.CharField(max_length=100)
+    username = models.CharField(max_length=100, unique=True, db_index=True)
+    email = models.EmailField(null=False, unique=True)  
+    date_joined = models.DateTimeField(auto_now_add=True)
+    last_login = models.DateTimeField(default=None, null=True)
+    is_blocked = models.BooleanField(default=False, null=True)
+    is_verified = models.BooleanField(default=False)
+    is_seller = models.BooleanField(default=False)
+    is_buyer = models.BooleanField(default=False)
+    password = models.CharField(max_length=200,db_index=True, default=None )
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+
+    objects = CustomUserManager()
+
+    # Unique related_name for groups and user_permissions
+    groups = models.ManyToManyField(Group, related_name='user_groups', blank=True)
+    user_permissions = models.ManyToManyField(Permission, related_name='user_permissions', blank=True)
+  
 
         
 class ProductImage(models.Model):
@@ -22,6 +48,7 @@ class UserProducts(models.Model):
     product_token = models.CharField(max_length=200, default=None, db_index=True, blank=True, null=True)
     product_title = models.CharField(max_length=150, default=None, db_index=True)
     product_description = models.TextField(verbose_name="Product Description", default=None,)
+    product_address= models.TextField(verbose_name="Product address", default=None,)
     condition = models.CharField(max_length=20, default="Not decided", verbose_name="Condition")
     brand = models.CharField(max_length=100, default="Not decided", verbose_name="Brand", db_index=True)
     color = models.CharField(max_length=100, default=None)
@@ -31,7 +58,9 @@ class UserProducts(models.Model):
     battery_capacity = models.CharField(max_length=20, default=None)
     price = models.IntegerField(default=None)
     date = models.DateTimeField(auto_now_add=True)
-    
+    latitude = models.CharField(max_length=100, default=False, db_index=True)
+    longitude = models.CharField(max_length=100, default=False, db_index=True)
+    total_price = models.IntegerField(default=1)
     def __str__(self):
         """
         String representation of the UserProducts object.
@@ -118,6 +147,7 @@ class Message(models.Model):
     """
     sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
     receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE, default=None)
+    order_id = models.CharField(max_length=100, default=False, db_index=True)
     content = models.TextField()
     is_read = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)

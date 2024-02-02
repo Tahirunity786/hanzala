@@ -4,31 +4,32 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer 
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepassword
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 import uuid
 from core.models import FavouritesSaved, Message, Order, ProductImage, UserProducts
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from collections import defaultdict
 from django.db.models import Prefetch
 from core.models import Reviews
 from rest_framework import generics
 from django.shortcuts import get_object_or_404
 from core.notification import send_message
-from django.db.models import Subquery,OuterRef, Q, F
+from django.db.models import Q
 from rest_framework import serializers
 from core.mixins import ApiErrorsMixin, PublicApiMixin
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from core.utiles import google_get_access_token, google_get_user_info
+from fcm_django.models import FCMDevice
 
 
 
 
-
+User = get_user_model()
 
 
 
@@ -104,7 +105,7 @@ class UserLoginView(APIView):
     Example:
         To authenticate a user, send a POST request to /user_login/ with valid credentials.
     """
-    
+    permission_classes = [AllowAny]
     # Attributes
     renderer_classes = [UserRenderer]
     
@@ -143,7 +144,7 @@ class ProductAPIView(APIView):
 
     Requires authentication.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AllowAny]
     parser_classes = [MultiPartParser, FormParser]
     renderer_classes = [UserRenderer]
 
@@ -157,62 +158,68 @@ class ProductAPIView(APIView):
         Returns:
         - Response: A JSON response indicating success or failure.
         """
-        # Serialize product data
         serializer = ProductSerializer(data=request.data)
- 
-        if serializer.is_valid():
-            # Create and save the product
-            product = serializer.save()
 
-            # Set the user for the product
-            username = request.user
-            user = User.objects.filter(username=username).first()
-            if user:
-                product.username = user
+        username = request.user.id
+        user = User.objects.get(username=username)
+        # Serialize product data
+        if  not user.is_blocked:
+            if serializer.is_valid():
+                # Create and save the product
+                product = serializer.save()
+    
+                # Set the user for the product
+                
+                user = User.objects.get(username=username)
+                if user:
+                    product.username = user
+                    product.save()
+                else:
+                    return Response({"error": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
+    
+                # Process and save product images
+                images = []
+                for image_data in request.data.getlist('images'):
+                    product_image = ProductImage.objects.create(image=image_data)
+                    product.product_image.add(product_image)
+                    images.append({
+                        "image_url": product_image.image.url,  # Assuming you want to include the URL
+                    })
+    
+                # Set product token and save
+                user.is_seller=True
+                user.save()
+                product.product_token = uuid.uuid4()
                 product.save()
-            else:
-                return Response({"error": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Process and save product images
-            images = []
-            for image_data in request.data.getlist('images'):
-                product_image = ProductImage.objects.create(image=image_data)
-                product.product_image.add(product_image)
-                images.append({
-                    "image_url": product_image.image.url,  # Assuming you want to include the URL
-                })
-
-            # Set product token and save
-            product.product_token = uuid.uuid4()
-            product.save()
-
-            # Prepare response data
-            response_data = {
-                "success": "Your product was added successfully",
-                "product": {
-                    "product_category": product.category,
-                    "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
-                    "product_id": product.id,
-                    "product_token": str(product.product_token),
-                    "product_images": images,
-                    "product_title": product.product_title,
-                    "product_description": product.product_description,
-                    "product_condition": product.condition,
-                    "product_brand": product.brand,
-                    "product_color": product.color,
-                    "product_model": product.model,
-                    "product_ram": product.ram,
-                    "product_storage": product.storage,
-                    "product_battery_capacity": product.battery_capacity,
-                    "product_price": product.price,
-                    
+    
+                # Prepare response data
+                response_data = {
+                    "success": "Your product was added successfully",
+                    "product": {
+                        "product_category": product.category,
+                        "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
+                        "product_id": product.id,
+                        "product_token": str(product.product_token),
+                        "product_images": images,
+                        "product_title": product.product_title,
+                        "product_description": product.product_description,
+                        "product_condition": product.condition,
+                        "product_brand": product.brand,
+                        "product_color": product.color,
+                        "product_model": product.model,
+                        "product_ram": product.ram,
+                        "product_storage": product.storage,
+                        "product_battery_capacity": product.battery_capacity,
+                        "product_price": product.price,
+                        
+                    }
                 }
-            }
-
-            return Response(response_data, status=status.HTTP_201_CREATED)
+    
+                return Response(response_data, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"Error":"Your are blocked by Admin, So cannot able to buy and sell a product"}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class DeleteProductView(APIView):
@@ -232,7 +239,7 @@ class DeleteProductView(APIView):
     - 400 Bad Request: Invalid input data
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AllowAny]
 
     def post(self, request, *args, **kwargs):
         """
@@ -316,7 +323,7 @@ class ADS(APIView):
     Renderer: UserRenderer (Custom renderer for user-specific responses)
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, AllowAny]
     renderer_classes = [UserRenderer]
 
     def get(self, request):
@@ -359,7 +366,7 @@ class Favourite(APIView):
         - 404 Not Found: Product not found.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     renderer_classes = [UserRenderer]
 
     def post(self, request):
@@ -414,7 +421,7 @@ class OrderView(APIView):
     Supports HTTP POST request to create a new order.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminUser]
     renderer_classes = [UserRenderer]
 
     def post(self, request):
@@ -477,7 +484,7 @@ class ReviewsCreateAPIView(generics.CreateAPIView):
     Note:
         - Assumes user authentication is set up.
     """
-
+    permission_classes = [IsAdminUser, IsAuthenticated]
     serializer_class = ReviewsSerializer
 
     def create(self, request, *args, **kwargs):
@@ -720,34 +727,42 @@ class SendNotificationView(APIView):
     Note: This endpoint does not require authentication (AllowAny permission).
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    serializer_class = notificationsearializer
     
     def post(self, request, *args, **kwargs):
-        """
-        Handle POST requests for sending push notifications.
-
-        Parameters:
-        - `token` (str): The FCM registration token of the target device.
-        - `title` (str): The title of the notification.
-        - `body` (str): The body/content of the notification.
-
-        Returns:
-        - Response: JSON response indicating the success or failure of the notification sending process.
-        """
         try:
-            token = request.data.get('token')
-            title = request.data.get('title')
-            body = request.data.get('body')
-            
-            is_sent = send_message(token, title, body)
-            
+            serializer = self.serializer_class(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            data_dict = serializer.validated_data
+
+            # Check if the device with the given registration_id already exists
+            existing_device = FCMDevice.objects.filter(registration_id=data_dict.get('token')).first()
+
+            if existing_device:
+                # If the device already exists, update its details
+                existing_device.name = "android"
+                existing_device.user = request.user
+                existing_device.type = "android"
+                existing_device.save()
+            else:
+                # If the device doesn't exist, create a new one
+                new_device = FCMDevice(
+                    name="android",
+                    registration_id=data_dict.get('token'),
+                    device_id=str(uuid.uuid4()),
+                    user=request.user,
+                    type="android"
+                )
+                new_device.save()
+
+            is_sent = send_message(data_dict.get('token'), data_dict.get('title'), data_dict.get('body'))
+
             if is_sent:
-                # Return a JSON response indicating success
                 return Response({'message': 'Notification sent successfully'}, status=status.HTTP_200_OK)
             else:
                 return Response({'error': 'Notification not sent successfully'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            # Handle other exceptions
             return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -783,7 +798,6 @@ class SendMsg(APIView):
 
 
 
-
 class SeeMessage(APIView):
     """
     API endpoint to view messages.
@@ -807,18 +821,23 @@ class SeeMessage(APIView):
         """
         # Get the authenticated user from the request
         user = request.user
-        sender = request.data.get("reciever_id")
+        receiver_id = request.data.get("receiver_id")
+        try:
+            # Try to get the receiver user object
+            receiver = User.objects.get(pk=receiver_id)
+        except User.DoesNotExist:
+            return Response({"ERROR":"Receiver user does not exist"})
 
-        # Retrieve messages for the authenticated user
-        messages = Message.objects.filter(Q(sender=sender) | Q(receiver=user)).order_by("-id")
+        # Retrieve messages for the authenticated user from both sender and receiver
+        messages = Message.objects.filter(
+            (Q(sender=user.id, receiver=receiver) | Q(sender=receiver, receiver=user.id))
+        ).order_by("-id")
 
         # Serialize the messages
-        serializer = MessageSerializer(messages, many=True)
+        serializer = Seemessagesearializer(messages, many=True)
 
         # Return the serialized data in the response
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
-
 
 def generate_tokens_for_user(user):
     """
@@ -883,7 +902,7 @@ class UserInfo(APIView):
     renderer_classes = [UserRenderer]
 
     def post(self, request):
-        serializer = InfouserSerializer(data=request.data, context={'request': request})
+        serializer = InfouserSerializer(data=request.data, context = {'request': request})
 
         if serializer.is_valid():
             try:
@@ -893,3 +912,13 @@ class UserInfo(APIView):
                 return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             return Response({'error': 'Invalid data provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class UpdatePassword(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    renderer_classes = [UserRenderer]
+
+    def post(seld, request):
+        # serlizer = 
+        pass

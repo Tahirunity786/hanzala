@@ -1,6 +1,6 @@
 from django.urls import path
-from payments.views import PaymentAPI
+from payments.views import PaymentView
 
 urlpatterns = [
-    path("public/payment/processing", PaymentAPI.as_view(), name="pyment")
+    path("public/payment/processing", PaymentView.as_view(), name="pyment")
 ]
