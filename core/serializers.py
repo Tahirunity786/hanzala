@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password
 from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts, Info_user
 
 User = get_user_model()
@@ -124,7 +125,29 @@ class ProductSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = UserProducts
-        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address']
+        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
+
+class ProductSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user products.
+
+    Attributes:
+        user_image (str): The user's image URL or path.
+        product_title (str): The title of the product.
+        product_description (str): The description of the product.
+        condition (str): The condition of the product.
+        brand (str): The brand of the product.
+        color (str): The color of the product.
+        model (str): The model of the product.
+        ram (int): The RAM size of the product.
+        storage (int): The storage capacity of the product.
+        battery_capacity (int): The battery capacity of the product.
+        category (str): The category of the product.
+        price (float): The price of the product.
+    """
+    class Meta:
+        model = UserProducts
+        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
 
     def create(self, validated_data):
         """
@@ -152,6 +175,8 @@ class ProductSerializer(serializers.ModelSerializer):
         latitude = validated_data.pop('latitude', None)
         longitude = validated_data.pop('longitude', None)
         product_address = validated_data.pop('product_address', None)
+        notification_token = validated_data.pop('notification_token', None)
+
 
         # Optimizing category
         category_string = category.replace(" ", "").lower()
@@ -173,6 +198,7 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.latitude = latitude
         instance.longitude = longitude
         instance.product_address = product_address
+        instance.notification_token = notification_token
         instance.total_price = 1
         instance.save()
 
@@ -190,7 +216,7 @@ class ProductSerializer(serializers.ModelSerializer):
             UserProducts: The updated UserProducts instance.
         """
         images_data = validated_data.pop('images', [])
-        
+
         instance.product_title = validated_data.get('product_title', instance.product_title)
         instance.product_description = validated_data.get('product_description', instance.product_description)
         instance.condition = validated_data.get('condition', instance.condition)
@@ -231,8 +257,9 @@ class UserProductsSerializer(serializers.ModelSerializer):
     """
     product_image = ProductImageSerializer(many=True, read_only=True)
 
-    # Add a new field 'username' to display the actual username
+    # Add new fields 'username' and 'user_id' to display the actual username and user_id
     username = serializers.SerializerMethodField()
+    user_id = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProducts
@@ -243,6 +270,12 @@ class UserProductsSerializer(serializers.ModelSerializer):
         Custom method to retrieve the username from the related User model.
         """
         return obj.username.username if obj.username else None
+
+    def get_user_id(self, obj):
+        """
+        Custom method to retrieve the user_id from the related User model.
+        """
+        return obj.username.id if obj.username else None
     
     
 class Useraddsearializer(serializers.ModelSerializer):
@@ -323,7 +356,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = ('id', 'sender', 'receiver', 'content', 'timestamp',)
+        fields = ('id', 'sender','order_id', 'receiver', 'content', 'timestamp',)
 
 class GoogleSerializer(serializers.ModelSerializer):
     """
@@ -376,8 +409,22 @@ class notificationsearializer(serializers.Serializer):
     token = serializers.CharField(max_length=500, required=True)
 
 
-class UserUpdatepassword(serializers.ModelSerializer):
-    password2 = serializers.CharField(require=True, write_only=True)
+class UserUpdatepasswordSerializer(serializers.ModelSerializer):
+    new_password = serializers.CharField(required=True, write_only=True)
+    previous_password = serializers.CharField(required=True, write_only=True)
+
     class Meta:
         model = User
-        fields = ['password', 'password2']  
+        fields = ['password', 'new_password', 'previous_password']
+
+    def validate_previous_password(self, value):
+        user = self.instance  # Get the current user instance
+        if not check_password(value, user.password):
+            raise serializers.ValidationError("Previous password does not match.")
+        return value
+
+    def validate(self, data):
+        if data['new_password'] == data['previous_password']:
+            raise serializers.ValidationError("New password should be different from the previous password.")
+        return data
+

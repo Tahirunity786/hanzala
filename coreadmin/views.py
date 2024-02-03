@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from django.conf import settings
 from core.models import UserProducts, Order
 from django.core.exceptions import ObjectDoesNotExist
-from coreadmin.serializers import CreateUserSearializer, UserUpdateserializer, AdminMessageSerializer
+from coreadmin.serializers import CreateUserSearializer, UserUpdateserializer, AdminMessageSerializer, DeleteProductSerializer, UserSerializer
 from core.rendenerers import UserRenderer
 from core.tokken_agent import get_tokens_for_user
 from core.models import Message
@@ -266,3 +266,97 @@ class SpecificChatDeletion(APIView):
             return Response({"Success": "Messages deleted successfully"}, status=status.HTTP_200_OK)
         except ObjectDoesNotExist as e:
             return Response({"Error": "Sender or receiver from this id does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+class DeleteProductByAdminView(APIView):
+    """
+    API endpoint for deleting a user's product.
+
+    Requires authentication.
+
+    Request Format:
+    {
+        "id": "product_token"
+    }
+
+    Response:
+    - 200 OK: Product deleted successfully
+    - 404 Not Found: Product not found or user doesn't have permission to delete it
+    - 400 Bad Request: Invalid input data
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handle POST requests to delete a user's product.
+
+        Parameters:
+        - request: The HTTP request object.
+        - args: Additional positional arguments.
+        - kwargs: Additional keyword arguments.
+
+        Returns:
+        - Response: A JSON response indicating the result of the operation.
+        """
+        serializer = DeleteProductSerializer(data=request.data)
+        try:
+            if serializer.is_valid():
+                product_token = serializer.validated_data.get('id')
+    
+                # Find the product
+                product = UserProducts.objects.get(id=product_token)
+    
+                if product:
+                    product.delete()
+                    return Response({"detail": "Product deleted successfully"}, status=status.HTTP_200_OK)
+                else:
+                    return Response({"error": "Product not found."}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                return Response({"error": "Invalid input data"}, status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist as e:
+            return Response({"Error":"Product not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class BlockUserView(generics.CreateAPIView):  # Change to CreateAPIView
+    serializer_class = UserSerializer
+    permission_classes = [IsAdminUser]
+
+    def create(self, request, *args, **kwargs):  # Change to create method
+        user_id = request.data.get('user_id')
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user.is_blocked = True
+        user.save()
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class UnblockUserView(generics.CreateAPIView):  # Change to CreateAPIView
+    serializer_class = UserSerializer
+    permission_classes = [IsAdminUser]
+
+    def create(self, request, *args, **kwargs):  # Change to create method
+        user_id = request.data.get('user_id')
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user.is_blocked = False
+        user.save()
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ListUsersView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    queryset = User.objects.filter(is_staff=False)  # Exclude staff users
+    permission_classes = [IsAdminUser]  # Only allow admin users to access this view

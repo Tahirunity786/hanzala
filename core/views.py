@@ -4,7 +4,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepassword
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepasswordSerializer
+from coreadmin.serializers import UserSerializer
 from core.rendenerers import UserRenderer
 from random import randint
 from core.tokken_agent import get_tokens_for_user
@@ -161,22 +162,22 @@ class ProductAPIView(APIView):
         serializer = ProductSerializer(data=request.data)
 
         username = request.user.id
-        user = User.objects.get(username=username)
+        user = User.objects.get(id=username)
         # Serialize product data
         if  not user.is_blocked:
             if serializer.is_valid():
                 # Create and save the product
                 product = serializer.save()
-    
+
                 # Set the user for the product
-                
-                user = User.objects.get(username=username)
+
+
                 if user:
                     product.username = user
                     product.save()
                 else:
                     return Response({"error": "User not found"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
                 # Process and save product images
                 images = []
                 for image_data in request.data.getlist('images'):
@@ -185,17 +186,18 @@ class ProductAPIView(APIView):
                     images.append({
                         "image_url": product_image.image.url,  # Assuming you want to include the URL
                     })
-    
+
                 # Set product token and save
                 user.is_seller=True
                 user.save()
                 product.product_token = uuid.uuid4()
                 product.save()
-    
+
                 # Prepare response data
                 response_data = {
                     "success": "Your product was added successfully",
                     "product": {
+                        "product_seller_id": product.username.id,  # Include user ID here
                         "product_category": product.category,
                         "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
                         "product_id": product.id,
@@ -211,10 +213,11 @@ class ProductAPIView(APIView):
                         "product_storage": product.storage,
                         "product_battery_capacity": product.battery_capacity,
                         "product_price": product.price,
-                        
+                        "product_notification": product.notification_token,
+
                     }
                 }
-    
+
                 return Response(response_data, status=status.HTTP_201_CREATED)
             else:
                 return Response({"error": f"Product not created {serializer.errors}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -239,7 +242,7 @@ class DeleteProductView(APIView):
     - 400 Bad Request: Invalid input data
     """
 
-    permission_classes = [IsAuthenticated, AllowAny]
+    permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, *args, **kwargs):
         """
@@ -292,6 +295,10 @@ class UserProductsViewSet(APIView):
             for product in all_products:
                 # Serialize product data
                 serialized_product = UserProductsSerializer(product).data
+
+                # Append 'username' and 'user_id' to the serialized product data
+                serialized_product['username'] = product.username.username if product.username else None
+                serialized_product['user_id'] = product.username.id if product.username else None
 
                 # Serialize product images data
                 serialized_images = ProductImageSerializer(product.product_image.all(), many=True).data
@@ -438,7 +445,7 @@ class OrderView(APIView):
 
         # Extract data from the request
         product_id = request.data.get('product_id')
-        purchased_quantity = request.data.get('purchased_quantity')
+      
         payment_method = request.data.get('payment_method')
         # For notification
         device_token = request.data.get('device_token')
@@ -453,7 +460,7 @@ class OrderView(APIView):
             product = UserProducts.objects.get(id=product_id)
 
             # Create a new Order instance
-            order = Order.objects.create(user=user, product=product, purchased_quantity=purchased_quantity, payment_method=payment_method)
+            order = Order.objects.create(user=user, product=product, payment_method=payment_method)
             order.activate_order = "active order"
 
             # Serialize the created order instance
@@ -766,15 +773,14 @@ class SendNotificationView(APIView):
             return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class SendMsg(APIView):
     permission_classes = [IsAuthenticated]
-    renderer_classes = [UserRenderer]
-    
+
     def post(self, request):
         # Assuming the request data contains 'receiver_id' and 'content'
         receiver_id = request.data.get('receiver_id')
         content = request.data.get('content')
+        order_id = request.data.get('order_id')
 
         # Get the sender (current user) from the request
         sender = request.user
@@ -785,17 +791,22 @@ class SendMsg(APIView):
         except User.DoesNotExist:
             return Response({"error": "Receiver does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create the message
-        message = Message.objects.create(sender=sender, receiver=receiver, content=content)
+        sender_user = User.objects.get(id=sender.id)
+        if not sender_user.is_blocked and not receiver.is_blocked:
+            # Create the message
+            message = Message.objects.create(sender=sender, receiver=receiver, content=content, order_id=order_id)
 
-        # You might want to add additional logic here, such as updating unread counts, notifications, etc.
+            # You might want to add additional logic here, such as updating unread counts, notifications, etc.
 
-        # Serialize the created message
-        serializer = MessageSerializer(message)
+            # Serialize the created message
+            serializer = MessageSerializer(message)
 
-        # Return the serialized data in the response
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+            # Return the serialized data in the response
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        elif sender_user.is_blocked:
+            return Response({"error": "You are blocked by an admin, you can't send a message"}, status=status.HTTP_403_FORBIDDEN)
+        elif receiver.is_blocked:
+            return Response({"error": "Receiver is blocked, your message cannot be sent"}, status=status.HTTP_403_FORBIDDEN)
 
 
 class SeeMessage(APIView):
@@ -916,9 +927,53 @@ class UserInfo(APIView):
 
 
 class UpdatePassword(APIView):
+    """
+    API endpoint to update a user's password.
+    Requires authentication.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        Update the user's password.
+
+        Parameters:
+        - new_password: New password for the user.
+        - previous_password: Previous password for the user.
+
+        Returns:
+        - 200 OK: Password updated successfully.
+        - 400 Bad Request: If the request is missing required parameters, or previous password does not match.
+        """
+        user = request.user  # Get the current authenticated user
+
+        serializer = UserUpdatepasswordSerializer(user, data=request.data)
+        if serializer.is_valid():
+            user.set_password(serializer.validated_data['new_password'])
+            user.save()
+            return Response({"message": "Password updated successfully."},
+                            status=status.HTTP_200_OK)
+        else:
+            return Response({"error": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+class UpdateProfileView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request, *args, **kwargs):
+        instance = self.request.user  # Get the current authenticated user
+        serializer = UserSerializer(instance, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class Userprofile(APIView):
+    permission_classes = [IsAdminUser, IsAuthenticated]
     renderer_classes = [UserRenderer]
 
-    def post(seld, request):
-        # serlizer = 
+    def post(self, request):
         pass

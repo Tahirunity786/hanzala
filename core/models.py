@@ -60,6 +60,7 @@ class UserProducts(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     latitude = models.CharField(max_length=100, default=False, db_index=True)
     longitude = models.CharField(max_length=100, default=False, db_index=True)
+    notification_token = models.CharField(max_length=200, default=False, db_index=True)
     total_price = models.IntegerField(default=1)
     def __str__(self):
         """
@@ -82,7 +83,6 @@ class Order(models.Model):
     activate_order = models.CharField(max_length=100, default=False, db_index=True)
     received_order = models.CharField(max_length=100, default=False, db_index=True)
     canceled_order = models.CharField(max_length=100, default=False, db_index=True)
-    purchased_quantity = models.IntegerField(default=None, db_index=True)
     total_price = models.IntegerField(default=0)
     payment_method = models.CharField(max_length=100, default=False, db_index=True)
 

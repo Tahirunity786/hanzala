@@ -85,3 +85,14 @@ class AdminMessageSerializer(serializers.ModelSerializer):
         fields = ['content', 'is_read', 'timestamp']
 
 
+class DeleteProductSerializer(serializers.Serializer):
+    """
+    Serializer for deleting a product.
+    """
+    id = serializers.IntegerField()
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'full_name', 'profile', 'date_joined', 'last_login', 'is_blocked', 'is_verified', 'is_seller', 'is_buyer']
