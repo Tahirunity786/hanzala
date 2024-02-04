@@ -42,7 +42,6 @@ class UserProducts(models.Model):
         return "user.png"
     
     category = models.CharField(max_length=100, default=None)
-    user_image = models.ImageField(upload_to='product_images/user', verbose_name="Product user Image", default=default_user_image)
     username = models.ForeignKey(User, on_delete=models.CASCADE, related_name="products_created", default="", blank=True, null=True)
     product_image = models.ManyToManyField(ProductImage, related_name="products_images", blank=True)
     product_token = models.CharField(max_length=200, default=None, db_index=True, blank=True, null=True)
@@ -63,6 +62,7 @@ class UserProducts(models.Model):
     notification_token = models.CharField(max_length=200, default=False, db_index=True)
     total_price = models.IntegerField(default=0)
     quantity = models.IntegerField(default=1, null=True)
+    is_sold = models.BooleanField(default=False)
     def __str__(self):
         """
         String representation of the UserProducts object.
@@ -90,6 +90,7 @@ class Order(models.Model):
 
     # User Info segment Updated
     full_name = models.CharField(max_length=100, default=False, db_index=True, null=True)
+    payment_intent_id = models.CharField(max_length=100, default=False, db_index=True, null=True)
     country = models.CharField(max_length=100, default=False, db_index=True, null=True)
     address1 = models.TextField(null=True)
     address2 = models.TextField(null=True)

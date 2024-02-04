@@ -163,6 +163,7 @@ class ProductAPIView(APIView):
 
         username = request.user.id
         user = User.objects.get(id=username)
+        
         # Serialize product data
         if  not user.is_blocked:
             if serializer.is_valid():
@@ -170,8 +171,6 @@ class ProductAPIView(APIView):
                 product = serializer.save()
 
                 # Set the user for the product
-
-
                 if user:
                     product.username = user
                     product.save()
@@ -192,17 +191,17 @@ class ProductAPIView(APIView):
                 user.save()
                 product.product_token = uuid.uuid4()
                 product.save()
-
+                
                 # Prepare response data
                 response_data = {
                     "success": "Your product was added successfully",
                     "product": {
                         "product_seller_id": product.username.id,  # Include user ID here
+                        "product_seller_image": user.profile.url if user.profile else None,
                         "product_category": product.category,
-                        "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
                         "product_id": product.id,
                         "product_token": str(product.product_token),
-                        "product_images": user.profile,
+                        "product_images": images,
                         "product_title": product.product_title,
                         "product_description": product.product_description,
                         "product_condition": product.condition,

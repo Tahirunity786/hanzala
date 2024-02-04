@@ -105,6 +105,28 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ("product", "image")
 
 
+# class ProductSerializer(serializers.ModelSerializer):
+#     """
+#     Serializer for user products.
+
+#     Attributes:
+#         user_image (str): The user's image URL or path.
+#         product_title (str): The title of the product.
+#         product_description (str): The description of the product.
+#         condition (str): The condition of the product.
+#         brand (str): The brand of the product.
+#         color (str): The color of the product.
+#         model (str): The model of the product.
+#         ram (int): The RAM size of the product.
+#         storage (int): The storage capacity of the product.
+#         battery_capacity (int): The battery capacity of the product.
+#         category (str): The category of the product.
+#         price (float): The price of the product.
+#     """
+#     class Meta:
+#         model = UserProducts
+#         fields = ["product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
+
 class ProductSerializer(serializers.ModelSerializer):
     """
     Serializer for user products.
@@ -125,29 +147,7 @@ class ProductSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = UserProducts
-        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
-
-class ProductSerializer(serializers.ModelSerializer):
-    """
-    Serializer for user products.
-
-    Attributes:
-        user_image (str): The user's image URL or path.
-        product_title (str): The title of the product.
-        product_description (str): The description of the product.
-        condition (str): The condition of the product.
-        brand (str): The brand of the product.
-        color (str): The color of the product.
-        model (str): The model of the product.
-        ram (int): The RAM size of the product.
-        storage (int): The storage capacity of the product.
-        battery_capacity (int): The battery capacity of the product.
-        category (str): The category of the product.
-        price (float): The price of the product.
-    """
-    class Meta:
-        model = UserProducts
-        fields = ["user_image", "product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
+        fields = ["product_title", "product_description", "condition", "brand", "color", "model", "ram", "storage",'price','category', "battery_capacity",'latitude','longitude', 'product_address','notification_token']
 
     def create(self, validated_data):
         """
@@ -161,7 +161,6 @@ class ProductSerializer(serializers.ModelSerializer):
         """
         # Extracting fields from validated data
         product_title = validated_data.pop('product_title', None)
-        user_image = validated_data.pop('user_image', None)
         product_description = validated_data.pop('product_description', None)
         condition = validated_data.pop('condition', None)
         brand = validated_data.pop('brand', None)
@@ -184,7 +183,6 @@ class ProductSerializer(serializers.ModelSerializer):
 
         # Creating the instance with the remaining validated data
         instance = self.Meta.model(**validated_data)
-        instance.user_image = user_image
         instance.product_title = product_title
         instance.product_description = product_description
         instance.brand = brand
@@ -282,6 +280,12 @@ class UserProductsSerializer(serializers.ModelSerializer):
         Custom method to retrieve the user_id from the related User model.
         """
         return obj.username.id if obj.username else None
+    
+    def get_user_image(self, obj):
+        """
+        Custom method to retrieve the user_image from the related User model.
+        """
+        return obj.username.profile.url if obj.username else None
     
     
 class Useraddsearializer(serializers.ModelSerializer):
