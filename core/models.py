@@ -61,7 +61,8 @@ class UserProducts(models.Model):
     latitude = models.CharField(max_length=100, default=False, db_index=True)
     longitude = models.CharField(max_length=100, default=False, db_index=True)
     notification_token = models.CharField(max_length=200, default=False, db_index=True)
-    total_price = models.IntegerField(default=1)
+    total_price = models.IntegerField(default=0)
+    quantity = models.IntegerField(default=1, null=True)
     def __str__(self):
         """
         String representation of the UserProducts object.
@@ -85,6 +86,16 @@ class Order(models.Model):
     canceled_order = models.CharField(max_length=100, default=False, db_index=True)
     total_price = models.IntegerField(default=0)
     payment_method = models.CharField(max_length=100, default=False, db_index=True)
+
+
+    # User Info segment Updated
+    full_name = models.CharField(max_length=100, default=False, db_index=True, null=True)
+    country = models.CharField(max_length=100, default=False, db_index=True, null=True)
+    address1 = models.TextField(null=True)
+    address2 = models.TextField(null=True)
+    postal_code = models.IntegerField(default=0, null=True)
+    latitude1 = models.CharField(max_length=100, default=False, db_index=True, null=True)
+    latitude2 = models.CharField(max_length=100, default=False, db_index=True)
 
     def __str__(self):
         """
@@ -162,29 +173,3 @@ class Message(models.Model):
         return f"{self.sender} to {self.receiver}: {self.content}"
 
 
-class Info_user(models.Model):
-    """
-    Model to store additional information about a user.
-
-    Attributes:
-        user (User): ForeignKey to the User model, establishing a relationship.
-        full_name (str): User's full name.
-        country (str): User's country.
-        address1 (str): First line of the user's address.
-        address2 (str, optional): Second line of the user's address (can be None).
-        postal_code (int): User's postal code.
-        latitude1 (str): Latitude information related to address1.
-        latitude2 (str): Latitude information related to address2.
-
-    Note:
-        This model is related to the built-in User model in Django.
-    """
-
-    user = models.ForeignKey(User, related_name='User_profile', on_delete=models.CASCADE, default=None)
-    full_name = models.CharField(max_length=100, default=False, db_index=True)
-    country = models.CharField(max_length=100, default=False, db_index=True)
-    address1 = models.TextField()
-    address2 = models.TextField(null=True)
-    postal_code = models.IntegerField(default=0)
-    latitude1 = models.CharField(max_length=100, default=False, db_index=True)
-    latitude2 = models.CharField(max_length=100, default=False, db_index=True)

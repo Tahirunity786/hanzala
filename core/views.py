@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer,InfouserSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepasswordSerializer
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepasswordSerializer, UserProfileSerializer, OrderUpdateSerializer
 from coreadmin.serializers import UserSerializer
 from core.rendenerers import UserRenderer
 from random import randint
@@ -202,7 +202,7 @@ class ProductAPIView(APIView):
                         "product_user_image": product.user_image.url if product.user_image else '',  # Convert ImageFieldFile to URL string
                         "product_id": product.id,
                         "product_token": str(product.product_token),
-                        "product_images": images,
+                        "product_images": user.profile,
                         "product_title": product.product_title,
                         "product_description": product.product_description,
                         "product_condition": product.condition,
@@ -908,23 +908,6 @@ class GoogleLoginApi(APIView):
             return Response(response_data)
         
 
-class UserInfo(APIView):
-    permission_classes = [IsAuthenticated]
-    renderer_classes = [UserRenderer]
-
-    def post(self, request):
-        serializer = InfouserSerializer(data=request.data, context = {'request': request})
-
-        if serializer.is_valid():
-            try:
-                user_info = serializer.save()
-                return Response({"Success": "Information saved successfully."}, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                return Response({'error': f'An unexpected error occurred: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            return Response({'error': 'Invalid data provided'}, status=status.HTTP_400_BAD_REQUEST)
-    
-
 
 class UpdatePassword(APIView):
     """
@@ -958,7 +941,7 @@ class UpdatePassword(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
 class UpdateProfileView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         instance = self.request.user  # Get the current authenticated user
@@ -971,9 +954,52 @@ class UpdateProfileView(APIView):
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class Userprofile(APIView):
-    permission_classes = [IsAdminUser, IsAuthenticated]
-    renderer_classes = [UserRenderer]
+class UserProfileView(generics.RetrieveAPIView):
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        # Retrieve the profile of the authenticated user
+        return self.request.user
+
+
+class OrderUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        pass
+        """
+        Update user information in an existing order using POST method.
+
+        Parameters:
+        - order_id (int): The ID of the order to be updated.
+
+        Returns:
+        - Response: Serialized order data if successful, error response otherwise.
+        """
+
+        # Extract data from the request
+        order_id = request.data.get('order_id')
+
+        # Validate that order_id is not empty and is a valid integer
+        if not order_id or not order_id.isdigit():
+            return Response({"error": "Invalid order_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Get the authenticated user
+            user = request.user
+
+            # Retrieve the order based on the provided order_id
+            order = Order.objects.get(id=int(order_id), user=user)
+
+            # Use the OrderUpdateSerializer to update user information
+            serializer = OrderUpdateSerializer(instance=order, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Order.DoesNotExist:
+            # Return a 404 error response if the specified order does not exist
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)

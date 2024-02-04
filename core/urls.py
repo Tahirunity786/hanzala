@@ -19,9 +19,10 @@ from core.views import (
     SendMsg,
     SeeMessage,
     GoogleLoginApi,
-    UserInfo,
     UpdatePassword,
-    UpdateProfileView
+    UpdateProfileView,
+    UserProfileView,
+    OrderUpdateView
 )
 
 # Create a DefaultRouter for automatic URL routing with ViewSets
@@ -40,9 +41,6 @@ urlpatterns = [
 
     # Google authentication endpoint
     path('google/u/auth', GoogleLoginApi.as_view(), name="google-auth"),
-
-    # User information save endpoint
-    path("public/info/save", UserInfo.as_view(), name="Register"),
 
     # Product creation endpoint
     path('public/product/create', ProductAPIView.as_view(), name="CreateProduct"),
@@ -65,6 +63,8 @@ urlpatterns = [
     # User order creation endpoint
     path('public/user/create/orders', OrderView.as_view(), name='user-favourite-products'),
 
+    path('public/orders/update', OrderUpdateView.as_view(), name='order-update'),
+
     # User reviews creation endpoint
     path('public/user/create/reviews', ReviewsCreateAPIView.as_view(), name='user-reviews-products'),
 
@@ -83,12 +83,11 @@ urlpatterns = [
     # View for seeing user messages
     path('public/u/message/see', SeeMessage.as_view(), name='user-message'),
 
-
     path('public/u/password/update', UpdatePassword.as_view(), name='user-password-update'),
-
 
     path('public/u/profile/update', UpdateProfileView.as_view(), name='user-profile-update'),
 
+    path('public/u/profile', UserProfileView.as_view(), name='user-profile'),
   
 ]
 

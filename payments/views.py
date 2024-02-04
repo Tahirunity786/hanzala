@@ -16,18 +16,13 @@ import stripe
 
 logger = logging.getLogger(__name__)
 # stripe.api_key = settings.STRIPE_SECRET_KEY
-stripe.api_key = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 class PaymentView(APIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = CardInformationSerializer
 
     def post(self, request):
         try:
-            serializer = self.serializer_class(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            data_dict = serializer.validated_data
-
             product_id = request.data.get('product_id')
 
             # Check if the product exists
@@ -35,45 +30,51 @@ class PaymentView(APIView):
                 prod = UserProducts.objects.get(id=product_id)
             except ObjectDoesNotExist:
                 return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            customer = stripe.Customer.create()
 
-            # Create a PaymentIntent with Stripe
-            payment_method = stripe.PaymentMethod.create(
-                type="card",
-                card={
-                    "number": data_dict.get('card_number'),
-                    "exp_month": data_dict.get('exp_month'),
-                    "exp_year": data_dict.get('exp_year'),
-                    "cvc": data_dict.get('cvc'),
-                },
+            ephemeralKey = stripe.EphemeralKey.create(
+                customer=customer['id'],
+                stripe_version='2023-08-16',
             )
-
+            # Create a PaymentIntent
             payment_intent = stripe.PaymentIntent.create(
-                amount=int(prod.price * 100),  # Amount in cents
-                currency='usd',
-                payment_method_types=["card"],
-                payment_method=payment_method.id
+                amount=(prod.price)*100,
+                currency="usd",
+                customer=customer['id'],
+                automatic_payment_methods={"enabled": True},
             )
 
-            # Confirm the PaymentIntent (3D Secure authentication, if required)
-            payment_intent.confirm(payment_method='pm_card_visa')
+            # You would typically pass the client_secret to the frontend
+            client_secret = payment_intent.client_secret
 
-            # Record the payment in your database
-            payment = Order.objects.create(
+            # Record the payment intent ID in your database (don't capture yet)
+            order = Order.objects.create(
                 user=request.user,
                 total_price=prod.price,
                 product=prod,
                 activate_order="active",
-                purchased_quantity=1,
-                payment_method="online"
+                payment_method="online",
+                # payment_intent_id=payment_intent.id,
             )
 
             # Serialize the payment data for the response
-            payment_serializer = PaymentSerializer(payment)
+            payment_serializer = PaymentSerializer(order)
 
-            return Response({'payment': payment_serializer.data, 'client_secret': payment_intent.client_secret}, status=status.HTTP_201_CREATED)
+            return Response({'client_secret': client_secret,'ephemeralKey':ephemeralKey.secret,'customer':customer.id,'publishableKey':settings.STRIPE_PUBLIC_KEY, 'payment': payment_serializer.data}, status=status.HTTP_201_CREATED)
 
         except stripe.error.CardError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.RateLimitError as e:
+            return Response({'error': 'Rate limit error'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        except stripe.error.InvalidRequestError as e:
+            return Response({'error': 'Invalid request: {}'.format(str(e))}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.AuthenticationError as e:
+            return Response({'error': 'Authentication error'}, status=status.HTTP_401_UNAUTHORIZED)
+        except stripe.error.APIConnectionError as e:
+            return Response({'error': 'API connection error'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except stripe.error.StripeError as e:
+            return Response({'error': 'Stripe error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             # Log the exception for debugging purposes
             # Consider using a logging library or saving logs to a file

@@ -95,4 +95,4 @@ class DeleteProductSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'full_name', 'profile', 'date_joined', 'last_login', 'is_blocked', 'is_verified', 'is_seller', 'is_buyer']
+        fields = ['id', 'username', 'email', 'full_name', 'profile']

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
-from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts, Info_user
+from core.models import FavouritesSaved, Message, Order, ProductImage, Reviews, UserProducts
 
 User = get_user_model()
 
@@ -176,6 +176,7 @@ class ProductSerializer(serializers.ModelSerializer):
         longitude = validated_data.pop('longitude', None)
         product_address = validated_data.pop('product_address', None)
         notification_token = validated_data.pop('notification_token', None)
+        quantity = validated_data.pop('quantity', None)
 
 
         # Optimizing category
@@ -200,6 +201,11 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.product_address = product_address
         instance.notification_token = notification_token
         instance.total_price = 1
+        if quantity:
+            instance.quantity = quantity
+        else:
+            instance.quantity = 1
+            
         instance.save()
 
         return instance
@@ -366,35 +372,6 @@ class GoogleSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email']
 
-class InfouserSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the Info_user model.
-    Includes fields for user information.
-    """
-    full_name = serializers.CharField(max_length=100, write_only=True)
-    country = serializers.CharField(max_length=100, write_only=True)
-    address1 = serializers.CharField(max_length=100, write_only=True)
-    postal_code = serializers.IntegerField(write_only=True)
-    latitude1 = serializers.CharField(max_length=100, write_only=True)
-    latitude1 = serializers.CharField(max_length=100, write_only=True)
-
-    class Meta:
-        model = Info_user
-        fields = ("full_name", "country", "address1", "address2", "postal_code", "latitude1", "latitude2")
-
-    def create(self, validated_data):
-        """
-        Custom create method to handle Info_user instance creation.
-        """
-        # Extract user from request
-        user = self.context['request'].user
-
-        # Include user in validated_data
-        validated_data['user'] = user
-
-        # Create and return the Info_user instance
-        return super(InfouserSerializer, self).create(validated_data)
-    
 
 
 class Seemessagesearializer(serializers.ModelSerializer):
@@ -428,3 +405,13 @@ class UserUpdatepasswordSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("New password should be different from the previous password.")
         return data
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'profile', 'full_name', 'username', 'email', 'date_joined', 'last_login')
+
+
+class OrderUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['full_name', 'country', 'address1', 'address2', 'postal_code', 'latitude1', 'latitude2']
