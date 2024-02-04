@@ -24,18 +24,23 @@ class PaymentView(APIView):
 
     def post(self, request):
         user_id = request.user.id
-        user = User.objects.get(id = user_id)
-        if not user.is_blocked:
+        user = User.objects.get(id=user_id)
+        
+        # Move the product_id retrieval here
+        product_id = request.data.get('product_id')
+
+        try:
+            prod = UserProducts.objects.get(id=product_id)
+        except ObjectDoesNotExist:
+            return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not user.is_blocked and not prod.is_sold:
             try:
-                product_id = request.data.get('product_id')
                 protection_fee = int(request.data.get('protection_fee', 5))
-                delivery_fee = int(request.data.get('delivery_fee',5))
+                delivery_fee = int(request.data.get('delivery_fee', 5))
            
                 # Check if the product exists
-                try:
-                    prod = UserProducts.objects.get(id=product_id)
-                except ObjectDoesNotExist:
-                    return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+                
                 
                 customer = stripe.Customer.create()
     
@@ -60,7 +65,7 @@ class PaymentView(APIView):
                 order = Order.objects.create(
                     user=request.user,
                     total_price=total_price,
-                    product=prod.id,
+                    product=prod,  # Change this line to assign the UserProducts instance directly
                     activate_order="active",
                     payment_method="online",
                     payment_intent_id=payment_intent.id,
@@ -88,5 +93,7 @@ class PaymentView(APIView):
                 # Consider using a logging library or saving logs to a file
                 print(f"Unexpected error: {str(e)}")
                 return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            return Response({"Error":"You are not eligible to buy or sell a product"}, status=status.HTTP_403_FORBIDDEN)
+        elif prod.is_sold:
+            return Response({"Error": "Product was sold recently"}, status=status.HTTP_400_BAD_REQUEST)
+        elif user.is_blocked:
+            return Response({"Error": "You are blocked by admin so you can't buy or sell product"}, status=status.HTTP_403_FORBIDDEN)
