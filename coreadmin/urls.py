@@ -1,6 +1,6 @@
 # urls.py
 from django.urls import path
-from coreadmin.views import CreateUserView, UserDelete, UserUpdate,AdminMessageView, DeleteConversationView, SpecificChatDeletion,DeleteProductByAdminView, BlockUserView, UnblockUserView,ListUsersView 
+from coreadmin.views import CreateUserView, PaymentModifierCreateView, UserDelete, UserUpdate,AdminMessageView, DeleteConversationView, SpecificChatDeletion,DeleteProductByAdminView, BlockUserView, UnblockUserView,ListUsersView 
 
 urlpatterns = [
     path('admin-users/', CreateUserView.as_view(), name='adminusercreate'),
@@ -13,6 +13,7 @@ urlpatterns = [
     path('u/messages/sp/del', SpecificChatDeletion.as_view(), name='delmsg'),
     path('users/block/', BlockUserView.as_view(), name='block_user'),
     path('users/unblock/', UnblockUserView.as_view(), name='unblock_user'),
+    path('admin-users/payment_modifier', PaymentModifierCreateView.as_view(), name='payment_modifier_create'),
    
    
    

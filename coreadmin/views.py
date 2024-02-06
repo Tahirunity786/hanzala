@@ -6,15 +6,16 @@ from rest_framework import status
 from rest_framework import generics
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from django.conf import settings
-from core.models import UserProducts, Order
+from core.models import UserProducts
 from django.core.exceptions import ObjectDoesNotExist
-from coreadmin.serializers import CreateUserSearializer, UserUpdateserializer, AdminMessageSerializer, DeleteProductSerializer, UserSerializer
+from coreadmin.serializers import CreateUserSearializer, UserUpdateserializer, AdminMessageSerializer, DeleteProductSerializer, UserSerializer, PaymentModifierSerializer
 from core.rendenerers import UserRenderer
 from core.tokken_agent import get_tokens_for_user
 from core.models import Message
 from django.db.models import Min
 from django.db import transaction
 from django.db.models import Q
+from django.contrib.auth import authenticate
 
 User = get_user_model()
 
@@ -73,6 +74,55 @@ class CreateUserView(APIView):
             error_data = serializer.errors
             return Response(error_data, status=status.HTTP_406_NOT_ACCEPTABLE)
 
+class UserLoginView(APIView):
+    """
+    Class-based view for user authentication.
+
+    This view handles user authentication by verifying the provided username and password
+    against the user database using the Django authenticate function.
+
+    Methods:
+        - post(request): Handles the HTTP POST request for user authentication.
+
+    Returns:
+        Response: JSON response indicating the success or failure of authentication.
+
+    Example:
+        To authenticate a user, send a POST request to /user_login/ with valid credentials.
+    """
+    permission_classes = [AllowAny]
+    # Attributes
+    renderer_classes = [UserRenderer]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handles the HTTP POST request for user authentication.
+
+        Args:
+            request (rest_framework.request.Request): The HTTP request object.
+
+        Returns:
+            Response: JSON response indicating the success or failure of authentication.
+
+        Raises:
+            status.HTTP_200_OK: If authentication is successful.
+            status.HTTP_401_UNAUTHORIZED: If authentication fails.
+        """
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        user = authenticate(request, username=username, password=password)
+
+        if user and user.is_staff and user.is_superuser:
+            token = get_tokens_for_user(user)
+            # Authentication successful
+            return Response({"success": "Logged In successfully", "token": token}, status=status.HTTP_200_OK)
+        elif user and not user.is_staff:
+            # Authentication failed - Not an admin user
+            return Response({"Error": "Not an admin user."}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            # Authentication failed - User not found or other issues
+            return Response({"Error": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class UserDelete(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -360,3 +410,21 @@ class ListUsersView(generics.ListAPIView):
     serializer_class = UserSerializer
     queryset = User.objects.filter(is_staff=False)  # Exclude staff users
     permission_classes = [IsAdminUser]  # Only allow admin users to access this view
+
+class PaymentModifierCreateView(APIView):
+
+    permission_classes = [IsAdminUser]
+
+    
+    def post(self, request, *args, **kwargs):
+        # Create a mutable copy of request.data
+        mutable_data = request.data.copy()
+        
+        # Associate the current user with the who_update_fee_one_payment field
+        mutable_data['who_update_fee_one_payment'] = request.user.id
+
+        serializer = PaymentModifierSerializer(data=mutable_data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)

@@ -264,6 +264,7 @@ class UserProductsSerializer(serializers.ModelSerializer):
     # Add new fields 'username' and 'user_id' to display the actual username and user_id
     username = serializers.SerializerMethodField()
     user_id = serializers.SerializerMethodField()
+    user_image = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProducts
@@ -282,10 +283,7 @@ class UserProductsSerializer(serializers.ModelSerializer):
         return obj.username.id if obj.username else None
     
     def get_user_image(self, obj):
-        """
-        Custom method to retrieve the user_image from the related User model.
-        """
-        return obj.username.profile.url if obj.username else None
+        return obj.username.profile.url if obj.username and obj.username.profile else None
     
     
 class Useraddsearializer(serializers.ModelSerializer):

@@ -6,10 +6,11 @@ from fcm_django.models import FCMDevice
 from firebase_admin import messaging 
 
 # Define the path to the Firebase Admin SDK credentials file
-credential_path = os.path.join(settings.BASE_DIR, "fastfone-7f142-firebase-adminsdk-iht4a-b17acd657e.json")
+credential_path = os.path.join(settings.BASE_DIR, "credential.json")
 
 # Initialize Firebase Admin SDK with the credentials
 cred = credentials.Certificate(credential_path)
+
 initialize_app(cred)
 
 def send_message(token, body, title) -> bool:

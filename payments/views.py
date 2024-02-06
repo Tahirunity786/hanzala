@@ -7,17 +7,17 @@ from .serializers import CardInformationSerializer, PaymentSerializer
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from core.models import UserProducts, Order
+from coreadmin.models import PaymentModifier
 from django.core.exceptions import ObjectDoesNotExist
 import stripe
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-
-
 logger = logging.getLogger(__name__)
 # stripe.api_key = settings.STRIPE_SECRET_KEY
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
 
 class PaymentView(APIView):
     permission_classes = [IsAuthenticated]
@@ -25,7 +25,8 @@ class PaymentView(APIView):
     def post(self, request):
         user_id = request.user.id
         user = User.objects.get(id=user_id)
-        
+        p_modifier = PaymentModifier.objects.first()
+
         # Move the product_id retrieval here
         product_id = request.data.get('product_id')
 
@@ -38,12 +39,11 @@ class PaymentView(APIView):
             try:
                 protection_fee = int(request.data.get('protection_fee', 5))
                 delivery_fee = int(request.data.get('delivery_fee', 5))
-           
+
                 # Check if the product exists
-                
-                
+
                 customer = stripe.Customer.create()
-    
+
                 ephemeralKey = stripe.EphemeralKey.create(
                     customer=customer['id'],
                     stripe_version='2023-08-16',
@@ -55,12 +55,13 @@ class PaymentView(APIView):
                     customer=customer['id'],
                     automatic_payment_methods={"enabled": True},
                 )
-    
+
                 # You would typically pass the client_secret to the frontend
                 client_secret = payment_intent.client_secret
-    
+                print(p_modifier.protection_fee)
+                print(p_modifier.delivery_fee)
                 # Product management logic
-                total_price = prod.price+protection_fee+delivery_fee
+                total_price = prod.price+p_modifier.protection_fee+p_modifier.delivery_fee
                 # Record the payment intent ID in your database (don't capture yet)
                 order = Order.objects.create(
                     user=request.user,
@@ -69,13 +70,15 @@ class PaymentView(APIView):
                     activate_order="active",
                     payment_method="online",
                     payment_intent_id=payment_intent.id,
+                    sold_by=prod.username
+
                 )
-    
+
                 # Serialize the payment data for the response
                 payment_serializer = PaymentSerializer(order)
-    
-                return Response({'client_secret': client_secret,'ephemeralKey':ephemeralKey.secret,'customer':customer.id,'publishableKey':settings.STRIPE_PUBLIC_KEY, 'payment': payment_serializer.data}, status=status.HTTP_201_CREATED)
-    
+
+                return Response({'client_secret': client_secret, 'ephemeralKey': ephemeralKey.secret, 'customer': customer.id, 'publishableKey': settings.STRIPE_PUBLIC_KEY, 'payment': payment_serializer.data}, status=status.HTTP_201_CREATED)
+
             except stripe.error.CardError as e:
                 return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
             except stripe.error.RateLimitError as e:

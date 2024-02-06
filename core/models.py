@@ -87,6 +87,7 @@ class Order(models.Model):
     total_price = models.IntegerField(default=0)
     payment_method = models.CharField(max_length=100, default=False, db_index=True)
 
+    sold_by = models.ForeignKey(User, on_delete=models.CASCADE,related_name="sold_by_user", null=True)
 
     # User Info segment Updated
     full_name = models.CharField(max_length=100, default=False, db_index=True, null=True)

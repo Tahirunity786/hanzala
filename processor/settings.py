@@ -36,11 +36,34 @@ INSTALLED_APPS = [
     'coreadmin.apps.CoreadminConfig',
     'rest_framework',
     "corsheaders",
-    "fcm_django"
+    "fcm_django",
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
     
 ]
+
+AUTHENTICATION_BACKENDS = [
+    'allauth.account.auth_backends.AuthenticationBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+# settings.py
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': '1042119321925-1ifrf14j4pk8ku5q3o8suc9cmo53t77t.apps.googleusercontent.com',
+            'secret': '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',
+        }
+    }
+}
+
+
+
 APPEND_SLASH=False
 AUTH_USER_MODEL = 'core.User'
+
 REST_FRAMEWORK = {
 
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -53,9 +76,6 @@ REST_FRAMEWORK = {
     ),
 
 }
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-]
 
 
 
@@ -69,6 +89,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware'
 ]
 
 ROOT_URLCONF = 'processor.urls'
@@ -149,13 +170,6 @@ SATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-EMAIL_HOST= os.getenv('EMAIL_HOST')
-EMAIL_PORT= os.getenv('EMAIL_PORT')
-EMAIL_USE_TLS= os.getenv('EMAIL_USE_TLS')
-EMAIL_HOST_USER= os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD= os.getenv('EMAIL_HOST_PASSWORD')
-
-
 
 
 SIMPLE_JWT = {
@@ -177,10 +191,13 @@ FIREBASE_CONFIG = {
     
 }
 
+GOOGLE_CLOUD_PROJECT="1042119321925-1ifrf14j4pk8ku5q3o8suc9cmo53t77t.apps.googleusercontent.com"
+WEB_CLIENT_SECRET="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"
 
-GOOGLE_OAUTH2_CLIENT_ID= os.getenv('GOOGLE_OAUTH2_CLIENT_ID')
-GOOGLE_OAUTH2_CLIENT_SECRET= os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET')
+
 
 STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY')
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+

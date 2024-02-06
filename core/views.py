@@ -1,10 +1,13 @@
+from os import abort
+import os
+import pprint
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, GoogleSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepasswordSerializer, UserProfileSerializer, OrderUpdateSerializer
+from core.serializers import CreateUserSearializer, MessageSerializer, OrderSerializer, ProductImageSerializer, ProductSerializer, ReviewsSerializer, UserProductsSerializer, Userfavouriteproduct, DeleteProductSerializer, Seemessagesearializer, notificationsearializer, UserUpdatepasswordSerializer, UserProfileSerializer, OrderUpdateSerializer
 from coreadmin.serializers import UserSerializer
 from core.rendenerers import UserRenderer
 from random import randint
@@ -21,18 +24,19 @@ from rest_framework import generics
 from django.shortcuts import get_object_or_404
 from core.notification import send_message
 from django.db.models import Q
-from rest_framework import serializers
-from core.mixins import ApiErrorsMixin, PublicApiMixin
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from core.utiles import google_get_access_token, google_get_user_info
 from fcm_django.models import FCMDevice
+from firebase_admin import credentials, initialize_app
+# Define the path to the Firebase Admin SDK credentials file
+credential_path = os.path.join(settings.BASE_DIR, "credential.json")
 
+# Initialize Firebase Admin SDK with the credentials
+cred = credentials.Certificate(credential_path)
 
+other_app = initialize_app(cred, name='Googleapp')
 
-
+from firebase_admin import auth
+from firebase_admin import exceptions as firebase_exceptions
 User = get_user_model()
-
-
 
 # Create your views here.
 class CreateUserView(APIView):
@@ -129,7 +133,7 @@ class UserLoginView(APIView):
 
         user = authenticate(request, username=username, password=password)
 
-        if user:
+        if user and not user.is_blocked:
             token = get_tokens_for_user(user)
             # Authentication successful
             return Response({"success": "Logged In successfully", "token":token}, status=status.HTTP_200_OK)
@@ -294,14 +298,17 @@ class UserProductsViewSet(APIView):
             for product in all_products:
                 # Serialize product data
                 serialized_product = UserProductsSerializer(product).data
-
+            
                 # Append 'username' and 'user_id' to the serialized product data
                 serialized_product['username'] = product.username.username if product.username else None
                 serialized_product['user_id'] = product.username.id if product.username else None
-
+            
+                # Include user image in serialized product data
+                serialized_product['user_image'] = product.username.profile.url if product.username and product.username.profile else None
+            
                 # Serialize product images data
                 serialized_images = ProductImageSerializer(product.product_image.all(), many=True).data
-
+            
                 # Append serialized product data to the corresponding category
                 category_mapping[product.category.lower()].append({
                     **serialized_product,
@@ -849,64 +856,6 @@ class SeeMessage(APIView):
         # Return the serialized data in the response
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-def generate_tokens_for_user(user):
-    """
-    Generate access and refresh tokens for the given user
-    """
-    serializer = TokenObtainPairSerializer()
-    token_data = serializer.get_token(user)
-    access_token = token_data.access_token
-    refresh_token = token_data
-    return access_token, refresh_token
-
-
-class GoogleLoginApi(APIView):
-    class InputSerializer(serializers.Serializer):
-        code = serializers.CharField(required=False)
-        error = serializers.CharField(required=False)
-        
-        
-        
-    permission_classes = [AllowAny]
-    
-    def post(self, request, *args, **kwargs):
-        input_serializer = self.InputSerializer(data=request.data)
-        input_serializer.is_valid(raise_exception=True)
-        # print(input_serializer)
-        validated_data = input_serializer.validated_data
-
-        code = validated_data.get('code')
-        error = validated_data.get('error')
-    
-        access_token = google_get_access_token(code=code)
-
-        user_data = google_get_user_info(access_token=access_token)
-
-        try:
-            user = User.objects.get(email=user_data['email'])
-            access_token, refresh_token = generate_tokens_for_user(user)
-            response_data = {
-                'user': GoogleSerializer(user).data,
-                'access_token': str(access_token),
-                'refresh_token': str(refresh_token)
-            }
-            return Response(response_data, status=status.HTTP_202_ACCEPTED)
-        except User.DoesNotExist:
-            username = user_data['email'].split('@')[0]
-            user = User.objects.create(
-                username=username,
-                email=user_data['email'],
-            )
-         
-            access_token, refresh_token = generate_tokens_for_user(user)
-            response_data = {
-                'user': GoogleSerializer(user).data,
-                'access_token': str(access_token),
-                'refresh_token': str(refresh_token)
-            }
-            return Response(response_data)
-        
-
 
 class UpdatePassword(APIView):
     """
@@ -1002,3 +951,21 @@ class OrderUpdateView(APIView):
         except Order.DoesNotExist:
             # Return a 404 error response if the specified order does not exist
             return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class GoogleAuthAPIView(APIView):
+    def post(self, request):
+        google_id_token = request.data.get('idToken')
+
+        try:
+            decoded_token = auth.verify_id_token(id_token=google_id_token)
+            uid = decoded_token['uid']
+
+            # Print the decoded token for inspection
+            print(f"Decoded token: {decoded_token}")
+
+            # Perform any additional logic (e.g., create or authenticate user)
+
+            return Response({'success': True, 'Decoded Token': decoded_token, 'uid-session': uid})
+        except firebase_exceptions.FirebaseError as e:
+            return Response({'error': str(e)}, status=401)

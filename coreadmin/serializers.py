@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from core.models import Message
+
+from coreadmin.models import PaymentModifier
 User = get_user_model()
 
 class CreateUserSearializer(serializers.ModelSerializer):
@@ -96,3 +98,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'full_name', 'profile']
+
+class PaymentModifierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentModifier
+        fields = ['who_update_fee_one_payment', 'protection_fee', 'delivery_fee']

@@ -2,7 +2,7 @@ from django.urls import path
 # from fcm_django.api.rest_framework import FCMDeviceAuthorizedViewSet
 from rest_framework.routers import DefaultRouter
 from core.views import (
-    CreateUserView, 
+    CreateUserView,
     UserLoginView, 
     ProductAPIView, 
     UserProductsViewSet,
@@ -18,11 +18,11 @@ from core.views import (
     SendNotificationView,
     SendMsg,
     SeeMessage,
-    GoogleLoginApi,
     UpdatePassword,
     UpdateProfileView,
     UserProfileView,
-    OrderUpdateView
+    OrderUpdateView,
+    GoogleAuthAPIView
 )
 
 # Create a DefaultRouter for automatic URL routing with ViewSets
@@ -38,9 +38,6 @@ urlpatterns = [
 
     # User login endpoint
     path('public/u/login', UserLoginView.as_view(), name="Login"),
-
-    # Google authentication endpoint
-    path('google/u/auth', GoogleLoginApi.as_view(), name="google-auth"),
 
     # Product creation endpoint
     path('public/product/create', ProductAPIView.as_view(), name="CreateProduct"),
@@ -88,6 +85,9 @@ urlpatterns = [
     path('public/u/profile/update', UpdateProfileView.as_view(), name='user-profile-update'),
 
     path('public/u/profile', UserProfileView.as_view(), name='user-profile'),
+
+    path('auth/google/u', GoogleAuthAPIView.as_view(), name='google-auth'),
+
   
 ]
 
