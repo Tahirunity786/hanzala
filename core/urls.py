@@ -22,7 +22,8 @@ from core.views import (
     UpdateProfileView,
     UserProfileView,
     OrderUpdateView,
-    GoogleAuthAPIView
+    GoogleAuthAPIView,
+    SpecificUserChat,
 )
 
 # Create a DefaultRouter for automatic URL routing with ViewSets
@@ -87,6 +88,8 @@ urlpatterns = [
     path('public/u/profile', UserProfileView.as_view(), name='user-profile'),
 
     path('auth/google/u', GoogleAuthAPIView.as_view(), name='google-auth'),
+
+    path('sp/u/chat', SpecificUserChat.as_view(), name='specific-chat'),
 
   
 ]

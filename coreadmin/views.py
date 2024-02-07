@@ -6,9 +6,9 @@ from rest_framework import status
 from rest_framework import generics
 from rest_framework.permissions import IsAdminUser, IsAuthenticated, AllowAny
 from django.conf import settings
-from core.models import UserProducts
+from core.models import Order, UserProducts
 from django.core.exceptions import ObjectDoesNotExist
-from coreadmin.serializers import CreateUserSearializer, UserUpdateserializer, AdminMessageSerializer, DeleteProductSerializer, UserSerializer, PaymentModifierSerializer
+from coreadmin.serializers import CreateUserSearializer, OrderSerializer, UserUpdateserializer, AdminMessageSerializer, DeleteProductSerializer, UserSerializer, PaymentModifierSerializer, PaymentDetailsSerializers
 from core.rendenerers import UserRenderer
 from core.tokken_agent import get_tokens_for_user
 from core.models import Message
@@ -16,7 +16,7 @@ from django.db.models import Min
 from django.db import transaction
 from django.db.models import Q
 from django.contrib.auth import authenticate
-
+from payments.models import PaymentDetails
 User = get_user_model()
 
 class CreateUserView(APIView):
@@ -428,3 +428,20 @@ class PaymentModifierCreateView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class OrderList(APIView):
+    permission_classes = [IsAdminUser]
+    def get(self, request):
+        orders = Order.objects.all()
+        serializer = OrderSerializer(orders, many=True)
+        return Response(serializer.data)
+
+
+class PaymentDetail(APIView):
+    
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        payments = PaymentDetails.objects.all()
+        serializer = PaymentDetailsSerializers(payments, many=True)
+        return Response(serializer.data)

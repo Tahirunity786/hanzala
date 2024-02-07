@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
-    
+
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -60,30 +60,27 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 
-
-APPEND_SLASH=False
+APPEND_SLASH = False
 AUTH_USER_MODEL = 'core.User'
 
 REST_FRAMEWORK = {
 
     'DEFAULT_AUTHENTICATION_CLASSES': (
-    
+
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_RENDERER_CLASSES': (
-    
+
         'rest_framework.renderers.JSONRenderer',
     ),
 
 }
 
 
-
-
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-     "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -171,33 +168,17 @@ SATIC_ROOT = os.path.join(BASE_DIR, 'static')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=360),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=365),
 }
 
 CORS_ALLOWED_ORIGINS = [
-   
+
     "http://127.0.0.1:8000",
 ]
-
-# Firebase configurations
-FIREBASE_CONFIG = {
-    'apiKey': os.getenv('apiKey'),
-    'projectId': os.getenv('projectId'),
-    'messagingSenderId': os.getenv('messagingSenderId'),
-    'appId': os.getenv('appId'),
-    
-}
-
-GOOGLE_CLOUD_PROJECT="1042119321925-1ifrf14j4pk8ku5q3o8suc9cmo53t77t.apps.googleusercontent.com"
-WEB_CLIENT_SECRET="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"
-
 
 
 STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY')
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
-
-

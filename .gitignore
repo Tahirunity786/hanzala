@@ -1,0 +1,6 @@
+# .gitignore
+
+# Ignore .env files
+.env
+.json
+.sqlite3

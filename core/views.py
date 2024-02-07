@@ -1,6 +1,7 @@
-from os import abort
 import os
-import pprint
+import random
+import string
+from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
@@ -25,17 +26,12 @@ from django.shortcuts import get_object_or_404
 from core.notification import send_message
 from django.db.models import Q
 from fcm_django.models import FCMDevice
-from firebase_admin import credentials, initialize_app
-# Define the path to the Firebase Admin SDK credentials file
-credential_path = os.path.join(settings.BASE_DIR, "credential.json")
+from google.auth.transport import requests
+from google.oauth2.id_token import verify_oauth2_token
+import requests as efwe
+from django.db.models import Max
+from coreadmin.models import PaymentModifier
 
-# Initialize Firebase Admin SDK with the credentials
-cred = credentials.Certificate(credential_path)
-
-other_app = initialize_app(cred, name='Googleapp')
-
-from firebase_admin import auth
-from firebase_admin import exceptions as firebase_exceptions
 User = get_user_model()
 
 # Create your views here.
@@ -149,7 +145,7 @@ class ProductAPIView(APIView):
 
     Requires authentication.
     """
-    permission_classes = [IsAuthenticated, AllowAny]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     renderer_classes = [UserRenderer]
 
@@ -245,7 +241,7 @@ class DeleteProductView(APIView):
     - 400 Bad Request: Invalid input data
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         """
@@ -291,6 +287,9 @@ class UserProductsViewSet(APIView):
                 Prefetch('product_image', queryset=ProductImage.objects.all())
             ).all()
 
+            # Fetch the first PaymentModifier record (you may need to adjust this query based on your requirements)
+            payment_modifier = PaymentModifier.objects.first()
+
             # Use defaultdict to simplify code
             category_mapping = defaultdict(list)
 
@@ -298,20 +297,24 @@ class UserProductsViewSet(APIView):
             for product in all_products:
                 # Serialize product data
                 serialized_product = UserProductsSerializer(product).data
-            
+
                 # Append 'username' and 'user_id' to the serialized product data
                 serialized_product['username'] = product.username.username if product.username else None
                 serialized_product['user_id'] = product.username.id if product.username else None
-            
+
                 # Include user image in serialized product data
                 serialized_product['user_image'] = product.username.profile.url if product.username and product.username.profile else None
-            
+
                 # Serialize product images data
                 serialized_images = ProductImageSerializer(product.product_image.all(), many=True).data
-            
+
                 # Append serialized product data to the corresponding category
                 category_mapping[product.category.lower()].append({
                     **serialized_product,
+                    'payment_modifier': {
+                        'protection_fee': payment_modifier.protection_fee,
+                        'delivery_fee': payment_modifier.delivery_fee,
+                    }
                 })
 
             # Create a dictionary to hold the response data
@@ -325,8 +328,6 @@ class UserProductsViewSet(APIView):
             return Response({"Error Details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
 class ADS(APIView):
     """
     API endpoint for retrieving products associated with the authenticated user.
@@ -336,7 +337,7 @@ class ADS(APIView):
     Renderer: UserRenderer (Custom renderer for user-specific responses)
     """
 
-    permission_classes = [IsAuthenticated, AllowAny]
+    permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def get(self, request):
@@ -379,7 +380,7 @@ class Favourite(APIView):
         - 404 Not Found: Product not found.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def post(self, request):
@@ -434,7 +435,7 @@ class OrderView(APIView):
     Supports HTTP POST request to create a new order.
     """
 
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated]
     renderer_classes = [UserRenderer]
 
     def post(self, request):
@@ -497,7 +498,7 @@ class ReviewsCreateAPIView(generics.CreateAPIView):
     Note:
         - Assumes user authentication is set up.
     """
-    permission_classes = [IsAdminUser, IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     serializer_class = ReviewsSerializer
 
     def create(self, request, *args, **kwargs):
@@ -954,18 +955,98 @@ class OrderUpdateView(APIView):
 
 
 class GoogleAuthAPIView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        google_id_token = request.data.get('idToken')
+        id_token = request.data.get('idToken')
 
         try:
-            decoded_token = auth.verify_id_token(id_token=google_id_token)
-            uid = decoded_token['uid']
+            # Verify the ID token
+            id_info = verify_oauth2_token(id_token, requests.Request())
+            # Get user info
+            user_email = id_info['email']
+            user_image_url = id_info['picture']
+            name = id_info['name']
+            
+            # Generate a random password
+            random_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+            random_filename = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
-            # Print the decoded token for inspection
-            print(f"Decoded token: {decoded_token}")
+            # Check if the user exists in the database, or create a new one
+            try:
+                user, created = User.objects.get_or_create(email=user_email, defaults={'username': user_email.split('@')[0], 'password': random_password}, full_name=name, is_buyer=True)
+            
+                # Download and save the profile picture
+                image_response = efwe.get(user_image_url)
+                
+                if image_response.status_code == 200:
+                    parsed_url = urlparse(user_image_url)
+                    file_extension = os.path.splitext(parsed_url.path)[1]
+                    if not file_extension:
+                        file_extension = '.jpg'  # If no extension found, default to jpg
+                    file_path = os.path.join(settings.MEDIA_ROOT, random_filename + file_extension)
+                    with open(file_path, 'wb') as f:
+                        f.write(image_response.content)
+                    user.profile = random_filename + file_extension
+                    user.save()
+                else:
+                    # Unable to download image
+                    return Response(data={"error": "Unable to download profile picture"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                token = get_tokens_for_user(user)
+                response_data = {
+                    'response': 'Account Created',
+                    'id': user.id,
+                    'username': user.username,
+                    'profile_image': user.profile.url,
+                    'email': user.email,
+                    'token': token
+                }
+                # Return some response or token
+                return Response(data={"message": response_data}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                # User account already exists, handle login
+                token = get_tokens_for_user(user)
+                response_data2 = {
+                    'response': 'Account Logged In',
+                    'username': user.username,
+                    'profile_image': user.profile.url,  # Return profile picture URL
+                    'email': user.email,
+                    'id': user.id,
+                    'token': token
+                }
+                return Response(response_data2, status=status.HTTP_200_OK)
+                
+        except ValueError as e:
+            # Invalid token
+            return Response(data={"error": f"Invalid token {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Perform any additional logic (e.g., create or authenticate user)
+class SpecificUserChat(APIView):
+    permission_classes = [IsAuthenticated]
 
-            return Response({'success': True, 'Decoded Token': decoded_token, 'uid-session': uid})
-        except firebase_exceptions.FirebaseError as e:
-            return Response({'error': str(e)}, status=401)
+    def get_receiver_info(self, receiver):
+        return {
+            'receiver_name': receiver.username,
+            'receiver_id': receiver.id,
+            'receiver_image': receiver.profile.url if receiver.profile else None,
+        }
+
+    def post(self, request):
+        # Retrieve all messages sent by the authenticated user (sender)
+        sender = request.user
+        # Get the latest message for each unique receiver
+        latest_messages = Message.objects.filter(sender=sender).values('receiver').annotate(
+            max_timestamp=Max('timestamp'), last_message=Max('content')
+        )
+        
+        # Serialize the receiver information along with the last message and its timestamp
+        receiver_info_list = []
+        for item in latest_messages:
+            receiver = User.objects.get(id=item['receiver'])
+            receiver_info = self.get_receiver_info(receiver)
+            receiver_info['last_message'] = item['last_message']
+            receiver_info['timestamp_last_message'] = item['max_timestamp']
+            receiver_info_list.append(receiver_info)
+        
+        # Return the serialized receiver information in the response
+        return Response(receiver_info_list, status=status.HTTP_200_OK)

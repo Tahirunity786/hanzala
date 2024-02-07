@@ -2,6 +2,7 @@ import datetime
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from core.models import Order
+from payments.models import PaymentDetails
 # from payments.models import Payment
 User = get_user_model()
 
@@ -56,3 +57,17 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+
+
+class PaymentDetailsSerializer(serializers.ModelSerializer):
+    accounttitle = serializers.CharField(max_length=100, required=True)
+    name = serializers.CharField(max_length=150, required=True)
+    card_number = serializers.CharField(max_length=150, required=True)
+    email = serializers.EmailField(required=True)
+    expiry = serializers.CharField(max_length=20, required=True)
+    cvc = serializers.CharField(required=True, validators=[check_cvc])
+
+    class Meta:
+        model = PaymentDetails
+        fields = ['id', 'accounttitle', 'name', 'email', 'card_number', 'cvc', 'expiry']
+

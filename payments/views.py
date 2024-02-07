@@ -3,7 +3,7 @@ import json
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import CardInformationSerializer, PaymentSerializer
+from .serializers import PaymentDetailsSerializer, PaymentSerializer
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 from core.models import UserProducts, Order
@@ -58,8 +58,6 @@ class PaymentView(APIView):
 
                 # You would typically pass the client_secret to the frontend
                 client_secret = payment_intent.client_secret
-                print(p_modifier.protection_fee)
-                print(p_modifier.delivery_fee)
                 # Product management logic
                 total_price = prod.price+p_modifier.protection_fee+p_modifier.delivery_fee
                 # Record the payment intent ID in your database (don't capture yet)
@@ -92,11 +90,21 @@ class PaymentView(APIView):
             except stripe.error.StripeError as e:
                 return Response({'error': 'Stripe error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except Exception as e:
-                # Log the exception for debugging purposes
-                # Consider using a logging library or saving logs to a file
-                print(f"Unexpected error: {str(e)}")
                 return Response({'error': 'An unexpected error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         elif prod.is_sold:
             return Response({"Error": "Product was sold recently"}, status=status.HTTP_400_BAD_REQUEST)
         elif user.is_blocked:
             return Response({"Error": "You are blocked by admin so you can't buy or sell product"}, status=status.HTTP_403_FORBIDDEN)
+
+
+class PaymentDetail(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = PaymentDetailsSerializer(data=request.data)
+        if serializer.is_valid():
+            # Assign the current authenticated user to the user field
+            serializer.validated_data['user'] = request.user
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
